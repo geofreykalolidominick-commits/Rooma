@@ -4,6 +4,7 @@ import {
   push,
   set,
   update,
+  remove,
   onValue,
   off
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
@@ -111,10 +112,10 @@ function compressImage(file, maxWidth = 600, quality = 0.65) {
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         resolve(canvas.toDataURL("image/jpeg", quality));
       };
-      img.onerror = () => reject(new Error("Could not read selected image."));
+      img.onerror = () => reject(new Error("Rooma: Could not read selected image."));
       img.src = event.target.result;
     };
-    reader.onerror = () => reject(new Error("Failed to load file."));
+    reader.onerror = () => reject(new Error("Rooma: Failed to load file."));
     reader.readAsDataURL(file);
   });
 }
@@ -137,20 +138,20 @@ function calculateDistanceKm(lat1, lon1, lat2, lon2) {
 
 function formatDistance(km) {
   if (km === null) return "";
-  return km < 1 ? `${Math.round(km * 1000)} m away` : `${km.toFixed(1)} km away`;
+  return km < 1 ? `${Math.round(km * 1000)}m away` : `${km.toFixed(1)} km away`;
 }
 
 function requestGuestLocation(silent = false) {
   if (!navigator.geolocation) {
     if (!silent) {
-      distanceStatus.textContent = "GPS location is not supported on this device.";
+      distanceStatus.textContent = "Rooma: GPS location is not supported on this device.";
       distanceStatus.classList.remove("hidden");
     }
     return;
   }
 
   if (!silent) {
-    distanceStatus.textContent = "Finding your GPS location...";
+    distanceStatus.textContent = "Rooma: Finding your GPS location...";
     distanceStatus.classList.remove("hidden");
   }
 
@@ -162,13 +163,13 @@ function requestGuestLocation(silent = false) {
       };
       renderRooms();
       if (!silent) {
-        distanceStatus.textContent = "Sorted by closest rooms to your current location.";
+        distanceStatus.textContent = "Rooma: Sorted by closest rooms to your current location.";
         distanceStatus.classList.remove("hidden");
       }
     },
     (err) => {
       if (!silent) {
-        distanceStatus.textContent = "Could not get location: " + err.message;
+        distanceStatus.textContent = "Rooma: Could not get location — " + err.message;
         distanceStatus.classList.remove("hidden");
       }
     },
@@ -182,7 +183,7 @@ photoInput.addEventListener("change", async (e) => {
   if (!file) return;
 
   try {
-    hostFeedback.textContent = "Optimizing photo...";
+    hostFeedback.textContent = "Rooma: Optimizing photo...";
     selectedPhotoDataUrl = await compressImage(file);
     photoPreviewImg.src = selectedPhotoDataUrl;
     photoPreviewWrap.classList.remove("hidden");
@@ -202,7 +203,7 @@ clearPhotoBtn.addEventListener("click", () => {
 // Host: Fill GPS coordinates automatically
 useMyLocationBtn.addEventListener("click", () => {
   if (!navigator.geolocation) {
-    hostFeedback.textContent = "GPS is not supported on this browser.";
+    hostFeedback.textContent = "Rooma: GPS is not supported on this browser.";
     return;
   }
   useMyLocationBtn.disabled = true;
@@ -216,7 +217,7 @@ useMyLocationBtn.addEventListener("click", () => {
       useMyLocationBtn.textContent = "✓ GPS Pin Added";
     },
     (err) => {
-      hostFeedback.textContent = "Location error: " + err.message;
+      hostFeedback.textContent = "Rooma: Location error — " + err.message;
       useMyLocationBtn.disabled = false;
       useMyLocationBtn.textContent = "📍 Use My Current GPS Location";
     },
@@ -295,9 +296,9 @@ addRoomForm.addEventListener("submit", async (e) => {
     document.getElementById("amenitiesInput").value = "En-suite bathroom, Fan, Parking";
     useMyLocationBtn.textContent = "📍 Use My Current GPS Location";
     clearPhotoBtn.click();
-    hostFeedback.textContent = "Submitted! Waiting for Rooma Admin approval before going live.";
+    hostFeedback.textContent = "Rooma: Submitted! Waiting for Admin approval before going live.";
   } catch (err) {
-    hostFeedback.textContent = "Error: " + err.message;
+    hostFeedback.textContent = "Rooma: Could not publish room — " + err.message;
   } finally {
     btn.disabled = false;
     btn.textContent = "+ Submit Room for Approval";
@@ -310,13 +311,46 @@ window.toggleRoomStatus = async (roomId, currentStatus) => {
   await update(ref(db, `rooms/${roomId}`), { availability: nextStatus });
 };
 
-// Admin: Approve or Reject Room
-window.setRoomApproval = async (roomId, nextApprovalStatus) => {
+// Host: Delete Own Room After Confirmation
+window.deleteHostRoom = async (roomId, encodedTitle) => {
+  const title = decodeURIComponent(encodedTitle || "this room");
+  const ok = confirm(`Rooma: Delete "${title}" permanently from the system? This cannot be undone.`);
+  if (!ok) return;
+
+  try {
+    await remove(ref(db, `rooms/${roomId}`));
+    hostFeedback.textContent = `Rooma: "${title}" has been deleted.`;
+  } catch (err) {
+    hostFeedback.textContent = "Rooma: Could not delete room — " + err.message;
+  }
+};
+
+// Admin: Approve Room
+window.approveRoom = async (roomId) => {
   if (!isAdmin) return;
   await update(ref(db, `rooms/${roomId}`), {
-    approvalStatus: nextApprovalStatus,
+    approvalStatus: "approved",
     reviewedAt: Date.now()
   });
+};
+
+// Admin: Reject Only (keeps record marked rejected)
+window.rejectRoomOnly = async (roomId) => {
+  if (!isAdmin) return;
+  await update(ref(db, `rooms/${roomId}`), {
+    approvalStatus: "rejected",
+    reviewedAt: Date.now()
+  });
+};
+
+// Admin: Reject & Delete Room from System
+window.rejectAndDeleteRoom = async (roomId, encodedTitle) => {
+  if (!isAdmin) return;
+  const title = decodeURIComponent(encodedTitle || "this room");
+  const ok = confirm(`Rooma Admin: Reject and permanently delete "${title}" from the system?`);
+  if (!ok) return;
+
+  await remove(ref(db, `rooms/${roomId}`));
 };
 
 // Guest: Open Booking Summary View for a Selected Room
@@ -346,7 +380,7 @@ window.openBookingPage = (roomId) => {
   const distKm = userCoords
     ? calculateDistanceKm(userCoords.lat, userCoords.lng, Number(room.latitude), Number(room.longitude))
     : null;
-  const distText = distKm !== null ? `<p class="distance-line">📏 ${formatDistance(distKm)} from your location</p>` : "";
+  const distText = distKm !== null ? `<p class="distance-line">${formatDistance(distKm)} from your location</p>` : "";
   const photoHtml = room.photoUrl
     ? `<img src="${room.photoUrl}" alt="${room.roomTitle}" class="booking-summary-photo" />`
     : "";
@@ -398,7 +432,6 @@ confirmBookingForm.addEventListener("submit", async (e) => {
     const shortCode = `RM-${newBookingRef.key.slice(-4).toUpperCase()}`;
     bookingRefText.textContent = `Reference: #${shortCode} • ${nights} night(s) • ${totalTzs.toLocaleString()} TZS`;
 
-    // Directions link in Google Maps (includes user origin if available)
     const dest = `${activeBookingRoom.latitude},${activeBookingRoom.longitude}`;
     openDirectionsBtn.href = userCoords
       ? `https://www.google.com/maps/dir/?api=1&origin=${userCoords.lat},${userCoords.lng}&destination=${dest}&travelmode=driving`
@@ -409,11 +442,24 @@ confirmBookingForm.addEventListener("submit", async (e) => {
     confirmBookingForm.classList.add("hidden");
     bookingConfirmedBox.classList.remove("hidden");
   } catch (err) {
-    alert("Booking failed: " + err.message);
+    alert("Rooma: Booking failed — " + err.message);
     confirmBookingBtn.disabled = false;
     confirmBookingBtn.textContent = "✓ Confirm Booking";
   }
 });
+
+function renderAdminActionRow(room) {
+  const safeTitle = encodeURIComponent(room.roomTitle || "Room");
+  return `
+    <div class="admin-btn-row">
+      <button type="button" class="btn-small admin-approve-btn" onclick="approveRoom('${room.id}')">Approve</button>
+      <div class="split-reject-btn" role="group" aria-label="Reject options">
+        <button type="button" class="split-reject-left" onclick="rejectAndDeleteRoom('${room.id}', '${safeTitle}')">Reject &amp; Del</button>
+        <button type="button" class="split-reject-right" onclick="rejectRoomOnly('${room.id}')">Reject</button>
+      </div>
+    </div>
+  `;
+}
 
 function renderRooms() {
   const q = searchInput.value.trim().toLowerCase();
@@ -461,7 +507,7 @@ function renderRooms() {
           : "";
         const distLine =
           r.distanceKm !== null
-            ? `<p class="distance-line">📏 ${formatDistance(r.distanceKm)}</p>`
+            ? `<p class="distance-line">${formatDistance(r.distanceKm)}</p>`
             : "";
 
         return `
@@ -480,7 +526,7 @@ function renderRooms() {
               <p class="meta-line" style="margin-top:8px;">📍 ${r.area}, ${r.city} • ${r.landmark}</p>
               <p class="sub-meta" style="margin-top:4px;">${(r.amenities || []).join(" • ")}</p>
               <p class="sub-meta" style="margin-top:6px;">
-                <a href="${mapLink}" target="_blank" rel="noopener" style="color:#0284c7;font-weight:700;">Open Map Pin (${r.latitude}, ${r.longitude})</a>
+                <a href="${mapLink}" target="_blank" rel="noopener" style="color:#0284c7;font-weight:700;">Open map</a>
               </p>
               ${distLine}
             </div>
@@ -494,7 +540,7 @@ function renderRooms() {
       .join("");
   }
 
-  // Host's own rooms (shows approval status + availability toggle)
+  // Host's own rooms (3/4 availability toggle + 1/4 red Delete button)
   const mine = allRooms.filter((r) => currentUser && r.hostId === currentUser.uid);
   if (mine.length === 0) {
     myRoomsList.innerHTML = `<div class="panel" style="grid-column:1/-1;text-align:center;color:#64748b;">You haven't uploaded any rooms yet.</div>`;
@@ -509,6 +555,7 @@ function renderRooms() {
         const photoHtml = r.photoUrl
           ? `<img src="${r.photoUrl}" alt="${r.roomTitle}" class="room-photo" loading="lazy" />`
           : "";
+        const safeTitle = encodeURIComponent(r.roomTitle || "Room");
 
         return `
           <div class="room-card">
@@ -524,14 +571,23 @@ function renderRooms() {
               <p class="meta-line" style="margin-top:6px;">${r.area}, ${r.city} • ${Number(r.nightlyPrice).toLocaleString()} TZS/night</p>
               <p class="sub-meta" style="margin-top:4px;">Occupancy: ${isAvail ? "Available Now" : "Occupied"}</p>
             </div>
-            <button
-              type="button"
-              class="btn-small"
-              style="width:100%;background:${isAvail ? "#ef4444" : "#16a34a"};"
-              onclick="toggleRoomStatus('${r.id}', '${r.availability}')"
-            >
-              ${isAvail ? "Mark as Occupied" : "Mark as Available Now"}
-            </button>
+            <div class="host-card-actions">
+              <button
+                type="button"
+                class="btn-small host-toggle-btn"
+                style="background:${isAvail ? "#ef4444" : "#16a34a"};"
+                onclick="toggleRoomStatus('${r.id}', '${r.availability}')"
+              >
+                ${isAvail ? "Mark as Occupied" : "Mark as Available Now"}
+              </button>
+              <button
+                type="button"
+                class="btn-small host-delete-btn"
+                onclick="deleteHostRoom('${r.id}', '${safeTitle}')"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         `;
       })
@@ -576,10 +632,7 @@ function renderAdminPanel() {
               <p class="meta-line" style="margin-top:6px;">📍 ${r.area}, ${r.city} • ${Number(r.nightlyPrice).toLocaleString()} TZS/night</p>
               <p class="sub-meta" style="margin-top:4px;">Host: ${r.hostName} (${r.hostPhone})</p>
             </div>
-            <div class="admin-btn-row">
-              <button type="button" class="btn-small" style="background:#16a34a;" onclick="setRoomApproval('${r.id}', 'approved')">Approve</button>
-              <button type="button" class="btn-small" style="background:#dc2626;" onclick="setRoomApproval('${r.id}', 'rejected')">Reject</button>
-            </div>
+            ${renderAdminActionRow(r)}
           </div>
         `;
       })
@@ -605,10 +658,7 @@ function renderAdminPanel() {
               <p class="meta-line" style="margin-top:6px;">${r.area}, ${r.city} • ${Number(r.nightlyPrice).toLocaleString()} TZS/night</p>
               <p class="sub-meta" style="margin-top:4px;">Host: ${r.hostName}</p>
             </div>
-            <div class="admin-btn-row">
-              <button type="button" class="btn-small" style="background:#16a34a;" onclick="setRoomApproval('${r.id}', 'approved')">Approve</button>
-              <button type="button" class="btn-small" style="background:#dc2626;" onclick="setRoomApproval('${r.id}', 'rejected')">Reject</button>
-            </div>
+            ${renderAdminActionRow(r)}
           </div>
         `;
       })
