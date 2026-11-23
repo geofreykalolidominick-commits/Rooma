@@ -118,6 +118,7 @@
       <div class="topbar-actions">
         <button type="button" id="guestModeTab" class="nav-tab active">Find Rooms</button>
         <button type="button" id="hostModeTab" class="nav-tab">Host Panel</button>
+        <button type="button" id="adminModeTab" class="nav-tab admin-tab hidden">Admin</button>
         <button type="button" id="logoutBtn" class="logout-btn">Logout</button>
       </div>
     </div>
@@ -134,7 +135,7 @@
         <div class="chips">
           <button type="button" id="filterAvailBtn" class="chip active">✓ Available Now</button>
           <button type="button" id="filterBudgetBtn" class="chip">≤ 35,000 TZS</button>
-          <button type="button" id="filterNearMeBtn" class="chip">📍 Near Me</button>
+          <button type="button" id="filterNearMeBtn" class="chip">📍 Sort Closest</button>
         </div>
         <p id="distanceStatus" class="distance-status hidden"></p>
       </div>
@@ -142,10 +143,57 @@
       <div id="roomsList" class="rooms-grid"></div>
     </div>
 
+    <!-- BOOKING SUMMARY & CONFIRMATION VIEW -->
+    <div id="bookingSection" class="hidden">
+      <div class="panel booking-panel">
+        <button type="button" id="backToRoomsBtn" class="back-link-btn">← Back to Rooms</button>
+        <div id="bookingRoomSummary"></div>
+
+        <form id="confirmBookingForm" class="booking-form">
+          <div class="form-grid">
+            <div>
+              <label class="field-label" for="bookingNightsInput">Number of Nights *</label>
+              <input type="number" id="bookingNightsInput" class="field-input" value="1" min="1" max="30" required />
+            </div>
+            <div>
+              <label class="field-label" for="bookingPhoneInput">Your Phone Number *</label>
+              <input type="tel" id="bookingPhoneInput" class="field-input" placeholder="+2557..." required />
+            </div>
+          </div>
+
+          <div class="total-bar">
+            <span>Total Stay Estimate:</span>
+            <strong id="bookingTotalText">0 TZS</strong>
+          </div>
+
+          <button type="submit" id="confirmBookingBtn" class="submit-room-btn">✓ Confirm Booking</button>
+        </form>
+
+        <!-- POST-CONFIRMATION ACTIONS (DIRECTIONS & CALL HOST) -->
+        <div id="bookingConfirmedBox" class="confirmed-box hidden">
+          <div class="confirmed-banner">
+            <h4>Booking Confirmed!</h4>
+            <p id="bookingRefText">Reference: #RM-0000</p>
+          </div>
+          <div class="confirmed-actions">
+            <a id="openDirectionsBtn" class="action-btn directions-btn" target="_blank" rel="noopener">
+              🧭 Open Directions
+            </a>
+            <a id="callHostConfirmedBtn" class="action-btn call-btn">
+              📞 Call Host
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- HOST UPLOAD & MANAGE VIEW -->
     <div id="hostSection" class="hidden">
       <div class="panel">
         <h3 class="section-title">Upload Guesthouse Room</h3>
+        <p class="sub-meta" style="margin-bottom: 12px;">
+          New rooms are reviewed by Rooma Admin before appearing publicly to guests.
+        </p>
         <form id="addRoomForm" class="form-grid">
           <div class="full">
             <label class="field-label" for="ghNameInput">Guesthouse Name *</label>
@@ -229,7 +277,7 @@
           </div>
 
           <div class="full">
-            <button type="submit" id="publishRoomBtn" class="submit-room-btn">+ Publish Room to Rooma</button>
+            <button type="submit" id="publishRoomBtn" class="submit-room-btn">+ Submit Room for Approval</button>
           </div>
         </form>
         <p id="hostFeedback" class="host-feedback"></p>
@@ -237,6 +285,23 @@
 
       <h3 class="section-heading">Your Uploaded Rooms</h3>
       <div id="myRoomsList" class="rooms-grid"></div>
+    </div>
+
+    <!-- ADMIN APPROVAL & BOOKINGS MONITOR VIEW -->
+    <div id="adminSection" class="hidden">
+      <div class="panel">
+        <h3 class="section-title">Admin Control Center</h3>
+        <div class="admin-stats" id="adminStatsBar"></div>
+      </div>
+
+      <h3 class="section-heading">Pending Room Approvals</h3>
+      <div id="pendingRoomsList" class="rooms-grid"></div>
+
+      <h3 class="section-heading">Approved &amp; Rejected Listings</h3>
+      <div id="allAdminRoomsList" class="rooms-grid"></div>
+
+      <h3 class="section-heading">Recent Guest Bookings</h3>
+      <div id="adminBookingsList" class="rooms-grid"></div>
     </div>
   </div>
 
