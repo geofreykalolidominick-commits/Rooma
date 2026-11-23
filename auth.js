@@ -29,8 +29,30 @@ const guestSection = document.getElementById("guestSection");
 const hostSection = document.getElementById("hostSection");
 const logoutBtn = document.getElementById("logoutBtn");
 
-function showAuthMessage(msg) {
-  authStatus.textContent = msg;
+function formatRoomaError(err) {
+  const code = err?.code || "";
+  const map = {
+    "auth/invalid-credential": "Rooma: Incorrect email or password. Please check and try again.",
+    "auth/user-not-found": "Rooma: No account found with this email. Tap Register to create one.",
+    "auth/wrong-password": "Rooma: Incorrect password. Please try again.",
+    "auth/email-already-in-use": "Rooma: This email is already registered. Please log in instead.",
+    "auth/weak-password": "Rooma: Password must be at least 6 characters long.",
+    "auth/invalid-email": "Rooma: Please enter a valid email address.",
+    "auth/too-many-requests": "Rooma: Too many failed attempts. Please wait a moment and try again.",
+    "auth/network-request-failed": "Rooma: Network error. Please check your internet connection."
+  };
+
+  if (map[code]) return map[code];
+
+  const cleanMsg = (err?.message || "Something went wrong.")
+    .replace(/^Firebase:\s*/i, "")
+    .replace(/\s*\(auth\/[^)]+\)\.?$/i, "");
+  return `Rooma: ${cleanMsg}`;
+}
+
+function showAuthMessage(errOrMsg) {
+  authStatus.textContent =
+    typeof errOrMsg === "string" ? errOrMsg : formatRoomaError(errOrMsg);
   authStatus.classList.remove("hidden");
 }
 
@@ -82,7 +104,7 @@ registerForm.addEventListener("submit", async (e) => {
       createdAt: Date.now()
     });
   } catch (err) {
-    showAuthMessage(err.message);
+    showAuthMessage(err);
   } finally {
     btn.disabled = false;
     btn.textContent = "Register";
@@ -103,7 +125,7 @@ loginForm.addEventListener("submit", async (e) => {
     btn.textContent = "Logging in...";
     await signInWithEmailAndPassword(auth, email, password);
   } catch (err) {
-    showAuthMessage(err.message);
+    showAuthMessage(err);
   } finally {
     btn.disabled = false;
     btn.textContent = "Login";
