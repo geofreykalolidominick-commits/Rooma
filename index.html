@@ -8,7 +8,7 @@
 </head>
 <body>
 
-  <!-- ==================== 1. AUTH VIEW ==================== -->
+  <!-- ==================== 1. AUTH & QUICK GUEST ONBOARDING ==================== -->
   <div id="authView" class="auth-wrapper">
     <div class="brand-banner">
       <h1>Rooma</h1>
@@ -23,12 +23,47 @@
       </div>
 
       <div class="pill-switch">
-        <button type="button" id="tabLoginBtn" class="pill-btn active">Login</button>
+        <button type="button" id="tabGuestQuickBtn" class="pill-btn active">Quick Guest</button>
+        <button type="button" id="tabLoginBtn" class="pill-btn">Login</button>
         <button type="button" id="tabRegisterBtn" class="pill-btn">Register</button>
       </div>
 
-      <!-- LOGIN FORM -->
-      <form id="loginForm">
+      <!-- ONE-TIME GUEST QUICK START (NAME + VALID PHONE -> STRAIGHT TO FIND ROOMS) -->
+      <form id="guestQuickForm">
+        <div class="input-group">
+          <span class="input-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+            </svg>
+          </span>
+          <input type="text" id="quickGuestName" class="auth-input" placeholder="Your Full Name" required />
+        </div>
+
+        <div class="input-group">
+          <span class="input-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+            </svg>
+          </span>
+          <input
+            type="tel"
+            id="quickGuestPhone"
+            class="auth-input"
+            placeholder="Phone (e.g., +255712345678 or 0712345678)"
+            required
+          />
+        </div>
+
+        <button type="submit" id="quickGuestSubmitBtn" class="primary-auth-btn">Find Rooms Now</button>
+
+        <div class="divider-or"><span>or</span></div>
+        <p class="switch-text">
+          Host or Admin? <a id="goToLoginLink">Sign in with Email</a>
+        </p>
+      </form>
+
+      <!-- EMAIL LOGIN FORM -->
+      <form id="loginForm" class="hidden">
         <div class="input-group">
           <span class="input-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -51,11 +86,11 @@
 
         <div class="divider-or"><span>or</span></div>
         <p class="switch-text">
-          Don't have an account? <a id="goToRegisterLink">Register</a>
+          Need an account? <a id="goToRegisterLink">Register</a>
         </p>
       </form>
 
-      <!-- REGISTER FORM -->
+      <!-- REGISTER FORM (INCLUDES PHONE NUMBER) -->
       <form id="registerForm" class="hidden">
         <div class="input-group">
           <span class="input-icon">
@@ -64,6 +99,21 @@
             </svg>
           </span>
           <input type="text" id="regName" class="auth-input" placeholder="Full Name" required />
+        </div>
+
+        <div class="input-group">
+          <span class="input-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
+            </svg>
+          </span>
+          <input
+            type="tel"
+            id="regPhone"
+            class="auth-input"
+            placeholder="Phone (e.g., +255712345678 or 0712345678)"
+            required
+          />
         </div>
 
         <div class="input-group">
@@ -100,7 +150,7 @@
 
         <div class="divider-or"><span>or</span></div>
         <p class="switch-text">
-          Already have an account? <a id="goToLoginLink">Login</a>
+          Already have an account? <a id="goToLoginFromRegLink">Login</a>
         </p>
       </form>
 
@@ -143,7 +193,7 @@
       <div id="roomsList" class="rooms-grid"></div>
     </div>
 
-    <!-- BOOKING SUMMARY & CONFIRMATION VIEW -->
+    <!-- BOOKING SUMMARY & APPROVAL / CONFIRMATION VIEW -->
     <div id="bookingSection" class="hidden">
       <div class="panel booking-panel">
         <button type="button" id="backToRoomsBtn" class="back-link-btn">← Back to Rooms</button>
@@ -151,28 +201,37 @@
 
         <form id="confirmBookingForm" class="booking-form">
           <div class="form-grid">
-            <div>
+            <div class="full">
               <label class="field-label" for="bookingNightsInput">Number of Nights *</label>
               <input type="number" id="bookingNightsInput" class="field-input" value="1" min="1" max="30" required />
             </div>
-            <div>
-              <label class="field-label" for="bookingPhoneInput">Your Phone Number *</label>
-              <input type="tel" id="bookingPhoneInput" class="field-input" placeholder="+2557..." required />
-            </div>
           </div>
+
+          <p id="savedGuestPhoneNote" class="sub-meta" style="margin-top: 8px;"></p>
 
           <div class="total-bar">
             <span>Total Stay Estimate:</span>
             <strong id="bookingTotalText">0 TZS</strong>
           </div>
 
-          <button type="submit" id="confirmBookingBtn" class="submit-room-btn">✓ Confirm Booking</button>
+          <button type="submit" id="confirmBookingBtn" class="submit-room-btn">Request Booking</button>
         </form>
 
-        <!-- POST-CONFIRMATION ACTIONS (DIRECTIONS & CALL HOST) -->
+        <!-- WAITING FOR HOST APPROVAL STATE -->
+        <div id="bookingPendingBox" class="pending-box hidden">
+          <div class="pending-banner">
+            <h4>Waiting for Host Approval...</h4>
+            <p id="bookingPendingRefText">Reference: #RM-0000</p>
+            <p class="sub-meta" style="margin-top: 4px;">
+              Directions and host call unlock as soon as the host approves your booking.
+            </p>
+          </div>
+        </div>
+
+        <!-- POST-APPROVAL ACTIONS (DIRECTIONS & CALL HOST) -->
         <div id="bookingConfirmedBox" class="confirmed-box hidden">
           <div class="confirmed-banner">
-            <h4>Booking Confirmed!</h4>
+            <h4>Booking Approved &amp; Confirmed!</h4>
             <p id="bookingRefText">Reference: #RM-0000</p>
           </div>
           <div class="confirmed-actions">
@@ -187,9 +246,12 @@
       </div>
     </div>
 
-    <!-- HOST UPLOAD & MANAGE VIEW -->
+    <!-- HOST UPLOAD, BOOKINGS & MANAGE VIEW -->
     <div id="hostSection" class="hidden">
-      <div class="panel">
+      <h3 class="section-heading">Incoming Guest Bookings</h3>
+      <div id="hostBookingsList" class="rooms-grid"></div>
+
+      <div class="panel" style="margin-top: 16px;">
         <h3 class="section-title">Upload Guesthouse Room</h3>
         <p class="sub-meta" style="margin-bottom: 12px;">
           New rooms are reviewed by Rooma Admin before appearing publicly to guests.
