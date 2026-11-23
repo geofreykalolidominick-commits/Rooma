@@ -9,14 +9,41 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 import { auth, db } from "./firebase-config.js";
 
+const ADMIN_EMAILS = ["geofreykalolidominick@gmail.com"];
+
+// Navigation & Section Elements
+const guestModeTab = document.getElementById("guestModeTab");
+const hostModeTab = document.getElementById("hostModeTab");
+const adminModeTab = document.getElementById("adminModeTab");
+
+const guestSection = document.getElementById("guestSection");
+const bookingSection = document.getElementById("bookingSection");
+const hostSection = document.getElementById("hostSection");
+const adminSection = document.getElementById("adminSection");
+
+// Guest Finder Elements
 const searchInput = document.getElementById("searchInput");
 const filterAvailBtn = document.getElementById("filterAvailBtn");
 const filterBudgetBtn = document.getElementById("filterBudgetBtn");
 const filterNearMeBtn = document.getElementById("filterNearMeBtn");
 const distanceStatus = document.getElementById("distanceStatus");
 const roomsList = document.getElementById("roomsList");
-const myRoomsList = document.getElementById("myRoomsList");
 
+// Booking Summary & Confirmation Elements
+const backToRoomsBtn = document.getElementById("backToRoomsBtn");
+const bookingRoomSummary = document.getElementById("bookingRoomSummary");
+const confirmBookingForm = document.getElementById("confirmBookingForm");
+const bookingNightsInput = document.getElementById("bookingNightsInput");
+const bookingPhoneInput = document.getElementById("bookingPhoneInput");
+const bookingTotalText = document.getElementById("bookingTotalText");
+const confirmBookingBtn = document.getElementById("confirmBookingBtn");
+const bookingConfirmedBox = document.getElementById("bookingConfirmedBox");
+const bookingRefText = document.getElementById("bookingRefText");
+const openDirectionsBtn = document.getElementById("openDirectionsBtn");
+const callHostConfirmedBtn = document.getElementById("callHostConfirmedBtn");
+
+// Host Upload Elements
+const myRoomsList = document.getElementById("myRoomsList");
 const addRoomForm = document.getElementById("addRoomForm");
 const useMyLocationBtn = document.getElementById("useMyLocationBtn");
 const photoInput = document.getElementById("photoInput");
@@ -25,14 +52,49 @@ const photoPreviewImg = document.getElementById("photoPreviewImg");
 const clearPhotoBtn = document.getElementById("clearPhotoBtn");
 const hostFeedback = document.getElementById("hostFeedback");
 
+// Admin Elements
+const adminStatsBar = document.getElementById("adminStatsBar");
+const pendingRoomsList = document.getElementById("pendingRoomsList");
+const allAdminRoomsList = document.getElementById("allAdminRoomsList");
+const adminBookingsList = document.getElementById("adminBookingsList");
+
 let currentUser = null;
+let isAdmin = false;
 let allRooms = [];
+let allBookings = [];
+let activeBookingRoom = null;
+
 let onlyAvailable = true;
 let budgetCap = null;
 let userCoords = null;
 let sortByDistance = false;
 let selectedPhotoDataUrl = "";
+
 let roomsRef = null;
+let bookingsRef = null;
+
+function isCurrentUserAdmin(user) {
+  if (!user || !user.email) return false;
+  return ADMIN_EMAILS.includes(user.email.trim().toLowerCase());
+}
+
+function showSection(sectionName) {
+  guestSection.classList.toggle("hidden", sectionName !== "guest");
+  bookingSection.classList.toggle("hidden", sectionName !== "booking");
+  hostSection.classList.toggle("hidden", sectionName !== "host");
+  adminSection.classList.toggle("hidden", sectionName !== "admin");
+
+  guestModeTab.classList.toggle("active", sectionName === "guest" || sectionName === "booking");
+  hostModeTab.classList.toggle("active", sectionName === "host");
+  adminModeTab.classList.toggle("active", sectionName === "admin");
+}
+
+guestModeTab.addEventListener("click", () => showSection("guest"));
+hostModeTab.addEventListener("click", () => showSection("host"));
+adminModeTab.addEventListener("click", () => {
+  if (isAdmin) showSection("admin");
+});
+backToRoomsBtn.addEventListener("click", () => showSection("guest"));
 
 // Compress image to lightweight JPEG data URL for free Realtime DB storage
 function compressImage(file, maxWidth = 600, quality = 0.65) {
@@ -76,6 +138,42 @@ function calculateDistanceKm(lat1, lon1, lat2, lon2) {
 function formatDistance(km) {
   if (km === null) return "";
   return km < 1 ? `${Math.round(km * 1000)} m away` : `${km.toFixed(1)} km away`;
+}
+
+function requestGuestLocation(silent = false) {
+  if (!navigator.geolocation) {
+    if (!silent) {
+      distanceStatus.textContent = "GPS location is not supported on this device.";
+      distanceStatus.classList.remove("hidden");
+    }
+    return;
+  }
+
+  if (!silent) {
+    distanceStatus.textContent = "Finding your GPS location...";
+    distanceStatus.classList.remove("hidden");
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    (pos) => {
+      userCoords = {
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude
+      };
+      renderRooms();
+      if (!silent) {
+        distanceStatus.textContent = "Sorted by closest rooms to your current location.";
+        distanceStatus.classList.remove("hidden");
+      }
+    },
+    (err) => {
+      if (!silent) {
+        distanceStatus.textContent = "Could not get location: " + err.message;
+        distanceStatus.classList.remove("hidden");
+      }
+    },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
 }
 
 // Photo selection & preview
@@ -126,7 +224,7 @@ useMyLocationBtn.addEventListener("click", () => {
   );
 });
 
-// Guest: Near Me GPS distance filter
+// Guest: Sort Closest toggle
 filterNearMeBtn.addEventListener("click", () => {
   if (sortByDistance) {
     sortByDistance = false;
@@ -136,31 +234,9 @@ filterNearMeBtn.addEventListener("click", () => {
     return;
   }
 
-  if (!navigator.geolocation) {
-    distanceStatus.textContent = "GPS location is not supported on this device.";
-    distanceStatus.classList.remove("hidden");
-    return;
-  }
-
-  distanceStatus.textContent = "Finding your GPS location...";
-  distanceStatus.classList.remove("hidden");
-
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      userCoords = {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude
-      };
-      sortByDistance = true;
-      filterNearMeBtn.classList.add("active");
-      distanceStatus.textContent = "Sorted by closest rooms to your current location.";
-      renderRooms();
-    },
-    (err) => {
-      distanceStatus.textContent = "Could not get location: " + err.message;
-    },
-    { enableHighAccuracy: true, timeout: 10000 }
-  );
+  sortByDistance = true;
+  filterNearMeBtn.classList.add("active");
+  requestGuestLocation(false);
 });
 
 // Guest: Search & Chip Filters
@@ -179,7 +255,7 @@ filterBudgetBtn.addEventListener("click", () => {
   renderRooms();
 });
 
-// Host: Publish Room
+// Host: Submit Room (starts as "pending" until Admin approves)
 addRoomForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!currentUser) return;
@@ -187,7 +263,7 @@ addRoomForm.addEventListener("submit", async (e) => {
   const btn = document.getElementById("publishRoomBtn");
   try {
     btn.disabled = true;
-    btn.textContent = "Publishing...";
+    btn.textContent = "Submitting...";
 
     const amenitiesRaw = document.getElementById("amenitiesInput").value;
     const amenities = amenitiesRaw
@@ -211,6 +287,7 @@ addRoomForm.addEventListener("submit", async (e) => {
       photoUrl: selectedPhotoDataUrl || "",
       amenities: amenities.length ? amenities : ["Standard room"],
       availability: "available_now",
+      approvalStatus: "pending",
       createdAt: Date.now()
     });
 
@@ -218,12 +295,12 @@ addRoomForm.addEventListener("submit", async (e) => {
     document.getElementById("amenitiesInput").value = "En-suite bathroom, Fan, Parking";
     useMyLocationBtn.textContent = "📍 Use My Current GPS Location";
     clearPhotoBtn.click();
-    hostFeedback.textContent = "Room published live to Rooma!";
+    hostFeedback.textContent = "Submitted! Waiting for Rooma Admin approval before going live.";
   } catch (err) {
     hostFeedback.textContent = "Error: " + err.message;
   } finally {
     btn.disabled = false;
-    btn.textContent = "+ Publish Room to Rooma";
+    btn.textContent = "+ Submit Room for Approval";
   }
 });
 
@@ -232,6 +309,111 @@ window.toggleRoomStatus = async (roomId, currentStatus) => {
   const nextStatus = currentStatus === "available_now" ? "occupied" : "available_now";
   await update(ref(db, `rooms/${roomId}`), { availability: nextStatus });
 };
+
+// Admin: Approve or Reject Room
+window.setRoomApproval = async (roomId, nextApprovalStatus) => {
+  if (!isAdmin) return;
+  await update(ref(db, `rooms/${roomId}`), {
+    approvalStatus: nextApprovalStatus,
+    reviewedAt: Date.now()
+  });
+};
+
+// Guest: Open Booking Summary View for a Selected Room
+function updateBookingTotal() {
+  if (!activeBookingRoom) return;
+  const nights = Math.max(1, parseInt(bookingNightsInput.value, 10) || 1);
+  const total = nights * Number(activeBookingRoom.nightlyPrice || 0);
+  bookingTotalText.textContent = `${total.toLocaleString()} TZS`;
+}
+
+bookingNightsInput.addEventListener("input", updateBookingTotal);
+
+window.openBookingPage = (roomId) => {
+  const room = allRooms.find((r) => r.id === roomId);
+  if (!room) return;
+
+  activeBookingRoom = room;
+  bookingNightsInput.value = "1";
+  bookingPhoneInput.value = "";
+  updateBookingTotal();
+
+  confirmBookingForm.classList.remove("hidden");
+  bookingConfirmedBox.classList.add("hidden");
+  confirmBookingBtn.disabled = false;
+  confirmBookingBtn.textContent = "✓ Confirm Booking";
+
+  const distKm = userCoords
+    ? calculateDistanceKm(userCoords.lat, userCoords.lng, Number(room.latitude), Number(room.longitude))
+    : null;
+  const distText = distKm !== null ? `<p class="distance-line">📏 ${formatDistance(distKm)} from your location</p>` : "";
+  const photoHtml = room.photoUrl
+    ? `<img src="${room.photoUrl}" alt="${room.roomTitle}" class="booking-summary-photo" />`
+    : "";
+
+  bookingRoomSummary.innerHTML = `
+    <div class="booking-summary-card">
+      ${photoHtml}
+      <div class="gh-name">${room.guesthouseName}</div>
+      <h3 class="room-title" style="margin-bottom:6px;">${room.roomTitle}</h3>
+      <p class="meta-line">📍 ${room.area}, ${room.city} • ${room.landmark}</p>
+      ${distText}
+      <p class="sub-meta" style="margin-top:6px;">Amenities: ${(room.amenities || []).join(" • ")}</p>
+      <p class="price" style="margin-top:10px;">${Number(room.nightlyPrice).toLocaleString()} TZS <span>/ night</span></p>
+    </div>
+  `;
+
+  showSection("booking");
+};
+
+// Guest: Confirm Booking -> Reveal Directions & Call Host
+confirmBookingForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!currentUser || !activeBookingRoom) return;
+
+  const nights = Math.max(1, parseInt(bookingNightsInput.value, 10) || 1);
+  const guestPhone = bookingPhoneInput.value.trim();
+  const totalTzs = nights * Number(activeBookingRoom.nightlyPrice || 0);
+
+  try {
+    confirmBookingBtn.disabled = true;
+    confirmBookingBtn.textContent = "Confirming...";
+
+    const newBookingRef = push(ref(db, "bookings"));
+    await set(newBookingRef, {
+      roomId: activeBookingRoom.id,
+      guesthouseName: activeBookingRoom.guesthouseName,
+      roomTitle: activeBookingRoom.roomTitle,
+      hostId: activeBookingRoom.hostId,
+      hostPhone: activeBookingRoom.hostPhone,
+      guestId: currentUser.uid,
+      guestName: currentUser.displayName || currentUser.email,
+      guestPhone,
+      nights,
+      totalTzs,
+      status: "confirmed",
+      createdAt: Date.now()
+    });
+
+    const shortCode = `RM-${newBookingRef.key.slice(-4).toUpperCase()}`;
+    bookingRefText.textContent = `Reference: #${shortCode} • ${nights} night(s) • ${totalTzs.toLocaleString()} TZS`;
+
+    // Directions link in Google Maps (includes user origin if available)
+    const dest = `${activeBookingRoom.latitude},${activeBookingRoom.longitude}`;
+    openDirectionsBtn.href = userCoords
+      ? `https://www.google.com/maps/dir/?api=1&origin=${userCoords.lat},${userCoords.lng}&destination=${dest}&travelmode=driving`
+      : `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+
+    callHostConfirmedBtn.href = `tel:${activeBookingRoom.hostPhone}`;
+
+    confirmBookingForm.classList.add("hidden");
+    bookingConfirmedBox.classList.remove("hidden");
+  } catch (err) {
+    alert("Booking failed: " + err.message);
+    confirmBookingBtn.disabled = false;
+    confirmBookingBtn.textContent = "✓ Confirm Booking";
+  }
+});
 
 function renderRooms() {
   const q = searchInput.value.trim().toLowerCase();
@@ -251,7 +433,10 @@ function renderRooms() {
     });
   }
 
-  const filtered = enriched.filter((r) => {
+  // Only approved rooms appear on the public Guest Finder feed
+  const approvedRooms = enriched.filter((r) => r.approvalStatus === "approved");
+
+  const filtered = approvedRooms.filter((r) => {
     const matchText =
       !q ||
       (r.city || "").toLowerCase().includes(q) ||
@@ -265,7 +450,7 @@ function renderRooms() {
   });
 
   if (filtered.length === 0) {
-    roomsList.innerHTML = `<div class="panel" style="grid-column:1/-1;text-align:center;color:#64748b;">No matching rooms yet. Switch to <b>Host Panel</b> to upload one!</div>`;
+    roomsList.innerHTML = `<div class="panel" style="grid-column:1/-1;text-align:center;color:#64748b;">No approved rooms match your filters right now.</div>`;
   } else {
     roomsList.innerHTML = filtered
       .map((r) => {
@@ -274,9 +459,9 @@ function renderRooms() {
         const photoHtml = r.photoUrl
           ? `<img src="${r.photoUrl}" alt="${r.roomTitle}" class="room-photo" loading="lazy" />`
           : "";
-        const distBadge =
+        const distLine =
           r.distanceKm !== null
-            ? `<span class="distance-pill">📍 ${formatDistance(r.distanceKm)}</span>`
+            ? `<p class="distance-line">📏 ${formatDistance(r.distanceKm)}</p>`
             : "";
 
         return `
@@ -292,16 +477,16 @@ function renderRooms() {
                   ${isAvail ? "Available Now" : "Occupied"}
                 </span>
               </div>
-              ${distBadge}
               <p class="meta-line" style="margin-top:8px;">📍 ${r.area}, ${r.city} • ${r.landmark}</p>
               <p class="sub-meta" style="margin-top:4px;">${(r.amenities || []).join(" • ")}</p>
-              <p class="sub-meta" style="margin-top:4px;">
-                <a href="${mapLink}" target="_blank" style="color:#0284c7;font-weight:600;">Open Map Pin (${r.latitude}, ${r.longitude})</a>
+              <p class="sub-meta" style="margin-top:6px;">
+                <a href="${mapLink}" target="_blank" rel="noopener" style="color:#0284c7;font-weight:700;">Open Map Pin (${r.latitude}, ${r.longitude})</a>
               </p>
+              ${distLine}
             </div>
             <div class="room-bottom">
               <div class="price">${Number(r.nightlyPrice).toLocaleString()} TZS <span>/ night</span></div>
-              <a class="btn-small" href="tel:${r.hostPhone}">Call Host</a>
+              <button type="button" class="btn-small" onclick="openBookingPage('${r.id}')">Book Room</button>
             </div>
           </div>
         `;
@@ -309,16 +494,22 @@ function renderRooms() {
       .join("");
   }
 
+  // Host's own rooms (shows approval status + availability toggle)
   const mine = allRooms.filter((r) => currentUser && r.hostId === currentUser.uid);
   if (mine.length === 0) {
     myRoomsList.innerHTML = `<div class="panel" style="grid-column:1/-1;text-align:center;color:#64748b;">You haven't uploaded any rooms yet.</div>`;
   } else {
     myRoomsList.innerHTML = mine
       .map((r) => {
+        const status = r.approvalStatus || "pending";
+        const badgeClass = status === "approved" ? "avail" : status === "rejected" ? "occ" : "pending";
+        const badgeLabel =
+          status === "approved" ? "Live (Approved)" : status === "rejected" ? "Rejected" : "Pending Admin";
         const isAvail = r.availability === "available_now";
         const photoHtml = r.photoUrl
           ? `<img src="${r.photoUrl}" alt="${r.roomTitle}" class="room-photo" loading="lazy" />`
           : "";
+
         return `
           <div class="room-card">
             <div>
@@ -328,11 +519,10 @@ function renderRooms() {
                   <div class="gh-name">${r.guesthouseName}</div>
                   <div class="room-title">${r.roomTitle}</div>
                 </div>
-                <span class="badge ${isAvail ? "avail" : "occ"}">
-                  ${isAvail ? "Available Now" : "Occupied"}
-                </span>
+                <span class="badge ${badgeClass}">${badgeLabel}</span>
               </div>
               <p class="meta-line" style="margin-top:6px;">${r.area}, ${r.city} • ${Number(r.nightlyPrice).toLocaleString()} TZS/night</p>
+              <p class="sub-meta" style="margin-top:4px;">Occupancy: ${isAvail ? "Available Now" : "Occupied"}</p>
             </div>
             <button
               type="button"
@@ -347,12 +537,112 @@ function renderRooms() {
       })
       .join("");
   }
+
+  if (isAdmin) {
+    renderAdminPanel();
+  }
 }
 
-// Subscribe to Realtime Database rooms when signed in
+function renderAdminPanel() {
+  const pending = allRooms.filter((r) => (r.approvalStatus || "pending") === "pending");
+  const reviewed = allRooms.filter((r) => r.approvalStatus === "approved" || r.approvalStatus === "rejected");
+
+  adminStatsBar.innerHTML = `
+    <span class="stat-pill">⏳ Pending: ${pending.length}</span>
+    <span class="stat-pill">✅ Approved: ${allRooms.filter((r) => r.approvalStatus === "approved").length}</span>
+    <span class="stat-pill">⛔ Rejected: ${allRooms.filter((r) => r.approvalStatus === "rejected").length}</span>
+    <span class="stat-pill">📖 Bookings: ${allBookings.length}</span>
+  `;
+
+  if (pending.length === 0) {
+    pendingRoomsList.innerHTML = `<div class="panel" style="grid-column:1/-1;text-align:center;color:#64748b;">No rooms waiting for approval.</div>`;
+  } else {
+    pendingRoomsList.innerHTML = pending
+      .map((r) => {
+        const photoHtml = r.photoUrl
+          ? `<img src="${r.photoUrl}" alt="${r.roomTitle}" class="room-photo" loading="lazy" />`
+          : "";
+        return `
+          <div class="room-card">
+            <div>
+              ${photoHtml}
+              <div class="room-top">
+                <div>
+                  <div class="gh-name">${r.guesthouseName}</div>
+                  <div class="room-title">${r.roomTitle}</div>
+                </div>
+                <span class="badge pending">Pending</span>
+              </div>
+              <p class="meta-line" style="margin-top:6px;">📍 ${r.area}, ${r.city} • ${Number(r.nightlyPrice).toLocaleString()} TZS/night</p>
+              <p class="sub-meta" style="margin-top:4px;">Host: ${r.hostName} (${r.hostPhone})</p>
+            </div>
+            <div class="admin-btn-row">
+              <button type="button" class="btn-small" style="background:#16a34a;" onclick="setRoomApproval('${r.id}', 'approved')">Approve</button>
+              <button type="button" class="btn-small" style="background:#dc2626;" onclick="setRoomApproval('${r.id}', 'rejected')">Reject</button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  if (reviewed.length === 0) {
+    allAdminRoomsList.innerHTML = `<div class="panel" style="grid-column:1/-1;text-align:center;color:#64748b;">No approved or rejected rooms yet.</div>`;
+  } else {
+    allAdminRoomsList.innerHTML = reviewed
+      .map((r) => {
+        const isApp = r.approvalStatus === "approved";
+        return `
+          <div class="room-card">
+            <div>
+              <div class="room-top">
+                <div>
+                  <div class="gh-name">${r.guesthouseName}</div>
+                  <div class="room-title">${r.roomTitle}</div>
+                </div>
+                <span class="badge ${isApp ? "avail" : "occ"}">${isApp ? "Approved" : "Rejected"}</span>
+              </div>
+              <p class="meta-line" style="margin-top:6px;">${r.area}, ${r.city} • ${Number(r.nightlyPrice).toLocaleString()} TZS/night</p>
+              <p class="sub-meta" style="margin-top:4px;">Host: ${r.hostName}</p>
+            </div>
+            <div class="admin-btn-row">
+              <button type="button" class="btn-small" style="background:#16a34a;" onclick="setRoomApproval('${r.id}', 'approved')">Approve</button>
+              <button type="button" class="btn-small" style="background:#dc2626;" onclick="setRoomApproval('${r.id}', 'rejected')">Reject</button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  if (allBookings.length === 0) {
+    adminBookingsList.innerHTML = `<div class="panel" style="grid-column:1/-1;text-align:center;color:#64748b;">No guest bookings recorded yet.</div>`;
+  } else {
+    adminBookingsList.innerHTML = allBookings
+      .map((b) => `
+        <div class="room-card">
+          <div>
+            <div class="gh-name">${b.guesthouseName}</div>
+            <div class="room-title">${b.roomTitle}</div>
+            <p class="meta-line" style="margin-top:6px;">Guest: ${b.guestName} (${b.guestPhone})</p>
+            <p class="sub-meta" style="margin-top:4px;">${b.nights} night(s) • <strong>${Number(b.totalTzs || 0).toLocaleString()} TZS</strong></p>
+          </div>
+          <span class="badge avail">Confirmed</span>
+        </div>
+      `)
+      .join("");
+  }
+}
+
+// Subscribe to Realtime Database rooms & bookings when signed in
 onAuthStateChanged(auth, (user) => {
   currentUser = user;
+  isAdmin = isCurrentUserAdmin(user);
+  adminModeTab.classList.toggle("hidden", !isAdmin);
+
   if (user) {
+    requestGuestLocation(true);
+
     roomsRef = ref(db, "rooms");
     onValue(roomsRef, (snapshot) => {
       const val = snapshot.val();
@@ -362,8 +652,23 @@ onAuthStateChanged(auth, (user) => {
       allRooms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
       renderRooms();
     });
+
+    if (isAdmin) {
+      bookingsRef = ref(db, "bookings");
+      onValue(bookingsRef, (snapshot) => {
+        const val = snapshot.val();
+        allBookings = val
+          ? Object.entries(val).map(([id, data]) => ({ id, ...data }))
+          : [];
+        allBookings.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        renderAdminPanel();
+      });
+    }
   } else {
     if (roomsRef) off(roomsRef);
+    if (bookingsRef) off(bookingsRef);
     allRooms = [];
+    allBookings = [];
+    activeBookingRoom = null;
   }
 });
