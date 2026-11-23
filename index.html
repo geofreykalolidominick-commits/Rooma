@@ -1,1 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rooma</title>
+<style>body{margin:0;background:#F4F2EE}</style>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://unpkg.com/lucide-react@0.263.1/dist/umd/lucide-react.min.js"></script>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect, useRef } = React;
+const L = window.lucideReact || {};
+const icon = (n) => L[n] || (() => null);
+const MapPin = icon('MapPin'), Search = icon('Search'), SlidersHorizontal = icon('SlidersHorizontal'),
+  Home = icon('Home'), User = icon('User'), Calendar = icon('Calendar'), Phone = icon('Phone'),
+  Clock = icon('Clock'), Check = icon('Check'), X = icon('X'), RefreshCw = icon('RefreshCw'),
+  Bell = icon('Bell'), ChevronLeft = icon('ChevronLeft'), Wifi = icon('Wifi'), Car = icon('Car'),
+  Coffee = icon('Coffee'), TrendingUp = icon('TrendingUp');
 
+const TEAL = '#0E5C53';
+const TEAL_DARK = '#0A423C';
+const OCHRE = '#C97D2D';
+const CREAM = '#FBF7F0';
+const INK = '#1F2A24';
+
+const INITIAL_ROOMS = [
+  { id: 1, house: 'Baraka Guest House', area: 'Kinondoni', distance: 0.4, price: 25000, type: 'Self-contained, single', amenities: ['wifi', 'parking'], available: true, expiresInMin: 178, color: TEAL },
+  { id: 2, house: 'Furaha Homes', area: 'Msasani', distance: 0.9, price: 18000, type: 'Double room, fan', amenities: ['wifi'], available: true, expiresInMin: 42, color: OCHRE },
+  { id: 3, house: 'Zawadi Lodge', area: 'Mikocheni', distance: 1.2, price: 12000, type: 'Single, shared bath', amenities: ['parking', 'breakfast'], available: true, expiresInMin: 110, color: TEAL },
+  { id: 4, house: 'Neema Inn', area: 'Upanga', distance: 1.6, price: 30000, type: 'Self-contained, double', amenities: ['wifi', 'parking', 'breakfast'], available: false, expiresInMin: 0, color: OCHRE },
+  { id: 5, house: 'Amani Rest House', area: 'Masaki', distance: 2.1, price: 22000, type: 'Single, self-contained', amenities: ['wifi'], available: true, expiresInMin: 5, color: TEAL },
+];
+
+const REQUESTS = [
+  { id: 101, name: 'Grace M.', room: 'Room 1 — self-contained', time: '2 min ago' },
+  { id: 102, name: 'Juma K.', room: 'Room 3 — single, shared bath', time: '9 min ago' },
+];
+
+function AmenityIcon({ kind }) {
+  const props = { size: 12, strokeWidth: 2 };
+  if (kind === 'wifi') return <Wifi {...props} />;
+  if (kind === 'parking') return <Car {...props} />;
+  if (kind === 'breakfast') return <Coffee {...props} />;
+  return null;
+}
+
+function StatusPill({ available, minutes }) {
+  if (!available) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#8A867E', background: '#EDEAE3', padding: '2px 8px', borderRadius: 999 }}>
+        <span style={{ width: 5, height: 5, borderRadius: 999, background: '#8A867E' }} />
+        Occupied
+      </span>
+    );
+  }
+  const low = minutes <= 15;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: low ? '#8A4A0E' : TEAL_DARK, background: low ? '#FBEAD8' : '#E3EFEC', padding: '2px 8px', borderRadius: 999 }}>
+      <span style={{ width: 5, height: 5, borderRadius: 999, background: low ? OCHRE : TEAL }} />
+      Available now
+    </span>
+  );
+}
+
+function RoomCard({ room, onSelect }) {
+  return (
+    <button
+      onClick={() => onSelect(room)}
+      style={{ display: 'flex', gap: 10, width: '100%', textAlign: 'left', padding: '12px 4px', background: 'transparent', border: 'none', borderBottom: '1px solid #EDEAE3', cursor: 'pointer' }}
+    >
+      <div style={{ width: 54, height: 54, borderRadius: 10, flexShrink: 0, background: room.color === TEAL ? '#E3EFEC' : '#FBEAD8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Home size={20} color={room.color} strokeWidth={1.75} />
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: INK }}>{room.house}</span>
+          <span style={{ fontSize: 11.5, color: '#8A867E', flexShrink: 0 }}>{room.distance} km</span>
+        </div>
+        <p style={{ fontSize: 12, color: '#6B675F', margin: '3px 0 6px' }}>{room.type} · {room.area}</p>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <StatusPill available={room.available} minutes={room.expiresInMin} />
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: INK }}>
+            TSh {room.price.toLocaleString()}<span style={{ color: '#8A867E', fontWeight: 400 }}>/night</span>
+          </span>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function PhoneChrome({ children }) {
+  return (
+    <div style={{ width: 340, height: 640, background: '#000', borderRadius: 40, padding: 10, boxShadow: '0 30px 60px -20px rgba(0,0,0,0.45)' }}>
+      <div style={{ width: '100%', height: '100%', background: CREAM, borderRadius: 30, overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'relative' }}>
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function TopBar({ label, onBack }) {
+  return (
+    <div style={{ padding: '14px 16px 10px', display: 'flex', alignItems: 'center', gap: 10, borderBottom: '1px solid #EDEAE3', background: CREAM }}>
+      {onBack && (
+        <button onClick={onBack} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: INK }}>
+          <ChevronLeft size={20} />
+        </button>
+      )}
+      <span style={{ fontSize: 14, fontWeight: 600, color: INK }}>{label}</span>
+    </div>
+  );
+}
+
+function ClientApp() {
+  const [screen, setScreen] = useState('nearby');
+  const [selected, setSelected] = useState(null);
+  const [holdSeconds, setHoldSeconds] = useState(45);
+  const [query, setQuery] = useState('');
+  const timerRef = useRef(null);
+
+  const rooms = INITIAL_ROOMS.filter(r =>
+    r.house.toLowerCase().includes(query.toLowerCase()) || r.area.toLowerCase().includes(query.toLowerCase())
+  );
+  const availableCount = INITIAL_ROOMS.filter(r => r.available).length;
+
+  useEffect(() => {
+    if (screen === 'hold') {
+      setHoldSeconds(45);
+      timerRef.current = setInterval(() => {
+        setHoldSeconds(s => {
+          if (s <= 1) {
+            clearInterval(timerRef.current);
+            setScreen('expired');
+            return 0;
+          }
+          return s - 1;
+        });
+      }, 1000);
+      return () => clearInterval(timerRef.current);
+    }
+  }, [screen]);
+
+  const openRoom = (room) => { setSelected(room); setScreen('detail'); };
+  const startHold = () => setScreen('hold');
+  const cancelHold = () => { clearInterval(timerRef.current); setScreen('detail'); };
+  const confirmBooking = () => { clearInterval(timerRef.current); setScreen('confirmed'); };
+
+  if (screen === 'nearby') {
+    return (
+      <>
+        <div style={{ padding: '14px 16px 10px', background: CREAM }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <MapPin size={15} color={TEAL} />
+              <span style={{ fontSize: 12.5, color: '#6B675F' }}>Kinondoni, Dar es Salaam</span>
+            </div>
+            <SlidersHorizontal size={17} color={'#6B675F'} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 10, background: '#fff', border: '1px solid #EDEAE3', borderRadius: 10, padding: '8px 10px' }}>
+            <Search size={15} color="#8A867E" />
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder="Search area or guest house"
+              style={{ border: 'none', outline: 'none', fontSize: 13, flex: 1, background: 'transparent', color: INK }}
+            />
+          </div>
+        </div>
+
+        <div style={{ padding: '9px 16px', background: '#E3EFEC', display: 'flex', alignItems: 'center', gap: 7 }}>
+          <span style={{ width: 7, height: 7, borderRadius: 999, background: TEAL }} />
+          <span style={{ fontSize: 11.5, color: TEAL_DARK, fontWeight: 600 }}>{availableCount} rooms available near you now</span>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 16px' }}>
+          {rooms.length === 0 && (
+            <p style={{ fontSize: 12.5, color: '#8A867E', textAlign: 'center', marginTop: 24 }}>No guest houses match that search.</p>
+          )}
+          {rooms.map(r => <RoomCard key={r.id} room={r} onSelect={openRoom} />)}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'space-around', padding: '12px 0', borderTop: '1px solid #EDEAE3', background: '#fff' }}>
+          <MapPin size={18} color={TEAL} />
+          <Search size={18} color="#B8B4AB" />
+          <Calendar size={18} color="#B8B4AB" />
+          <User size={18} color="#B8B4AB" />
+        </div>
+      </>
+    );
+  }
+
+  if (screen === 'detail' && selected) {
+    return (
+      <>
+        <TopBar label="Room details" onBack={() => setScreen('nearby')} />
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          <div style={{ height: 150, background: selected.color === TEAL ? '#E3EFEC' : '#FBEAD8', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Home size={40} color={selected.color} strokeWidth={1.5} />
+          </div>
+          <div style={{ padding: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+              <div>
+                <h2 style={{ fontSize: 16, fontWeight: 600, margin: 0, color: INK }}>{selected.house}</h2>
+                <p style={{ fontSize: 12.5, color: '#6B675F', margin: '4px 0 0' }}>{selected.type} · {selected.area}, {selected.distance} km away</p>
+              </div>
+              <StatusPill available={selected.available} minutes={selected.expiresInMin} />
+            </div>
+
+            <p style={{ fontSize: 20, fontWeight: 600, color: INK, margin: '14px 0 0' }}>
+              TSh {selected.price.toLocaleString()}<span style={{ fontSize: 13, fontWeight: 400, color: '#8A867E' }}> / night</span>
+            </p>
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+              {selected.amenities.map(a => (
+                <span key={a} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: '#6B675F', background: '#EDEAE3', padding: '4px 9px', borderRadius: 999 }}>
+                  <AmenityIcon kind={a} /> {a}
+                </span>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 16, padding: 12, background: '#fff', border: '1px solid #EDEAE3', borderRadius: 10 }}>
+              <p style={{ fontSize: 12, fontWeight: 600, color: INK, margin: '0 0 6px' }}>House rules</p>
+              <p style={{ fontSize: 12, color: '#6B675F', margin: 0, lineHeight: 1.6 }}>Check-in from 12:00. Valid ID required at arrival. Exact address shown after you hold or book.</p>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+              <button style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: `1px solid ${TEAL}`, background: '#fff', color: TEAL, fontSize: 13, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <Phone size={14} /> Call host
+              </button>
+            </div>
+          </div>
+        </div>
+        <div style={{ padding: 14, borderTop: '1px solid #EDEAE3', background: '#fff' }}>
+          <button
+            onClick={startHold}
+            disabled={!selected.available}
+            style={{ width: '100%', padding: '13px 0', borderRadius: 10, border: 'none', background: selected.available ? OCHRE : '#D8D4CA', color: '#fff', fontSize: 13.5, fontWeight: 600, cursor: selected.available ? 'pointer' : 'not-allowed' }}
+          >
+            {selected.available ? 'Hold this room · 45 min' : 'Currently unavailable'}
+          </button>
+        </div>
+      </>
+    );
+  }
+
+  if (screen === 'hold' && selected) {
+    const mm = String(Math.floor(holdSeconds / 60)).padStart(2, '0');
+    const ss = String(holdSeconds % 60).padStart(2, '0');
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }}>
+        <div style={{ width: 84, height: 84, borderRadius: 999, background: '#FBEAD8', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 18 }}>
+          <Clock size={34} color={OCHRE} strokeWidth={1.75} />
+        </div>
+        <p style={{ fontSize: 13, color: '#6B675F', margin: 0 }}>Room held at</p>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: INK, margin: '4px 0 18px' }}>{selected.house}</h2>
+        <div style={{ fontSize: 38, fontWeight: 700, color: INK, letterSpacing: 1 }}>{mm}:{ss}</div>
+        <p style={{ fontSize: 11.5, color: '#8A867E', margin: '6px 0 4px' }}>time left to arrive · shown compressed for this demo</p>
+        <p style={{ fontSize: 12.5, color: '#6B675F', margin: '14px 0 22px', lineHeight: 1.6 }}>
+          The host has been notified. Full address unlocked below — head over before the timer runs out.
+        </p>
+        <div style={{ width: '100%', padding: 12, background: '#fff', border: '1px solid #EDEAE3', borderRadius: 10, marginBottom: 18, display: 'flex', alignItems: 'center', gap: 8, boxSizing: 'border-box' }}>
+          <MapPin size={15} color={TEAL} />
+          <span style={{ fontSize: 12, color: INK }}>Plot 14, Kawe Beach Rd, Kinondoni</span>
+        </div>
+        <button onClick={confirmBooking} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: TEAL, color: '#fff', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', marginBottom: 10 }}>
+          I've arrived · confirm booking
+        </button>
+        <button onClick={cancelHold} style={{ width: '100%', padding: '11px 0', borderRadius: 10, border: '1px solid #EDEAE3', background: 'transparent', color: '#8A867E', fontSize: 13, cursor: 'pointer' }}>
+          Cancel hold
+        </button>
+      </div>
+    );
+  }
+
+  if (screen === 'expired') {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }}>
+        <X size={34} color="#8A867E" style={{ marginBottom: 12 }} />
+        <h2 style={{ fontSize: 15, fontWeight: 600, color: INK, margin: '0 0 6px' }}>Hold expired</h2>
+        <p style={{ fontSize: 12.5, color: '#6B675F', margin: '0 0 20px', lineHeight: 1.6 }}>
+          The room was released back to available. No charge was made.
+        </p>
+        <button onClick={() => setScreen('nearby')} style={{ padding: '11px 20px', borderRadius: 10, border: 'none', background: TEAL, color: '#fff', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}>
+          Back to nearby rooms
+        </button>
+      </div>
+    );
+  }
+
+  if (screen === 'confirmed') {
+    return (
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 24, textAlign: 'center' }}>
+        <div style={{ width: 64, height: 64, borderRadius: 999, background: '#E3EFEC', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+          <Check size={28} color={TEAL} strokeWidth={2} />
+        </div>
+        <h2 style={{ fontSize: 16, fontWeight: 600, color: INK, margin: '0 0 6px' }}>Booking confirmed</h2>
+        <p style={{ fontSize: 12.5, color: '#6B675F', margin: '0 0 20px' }}>{selected.house} · {selected.type}</p>
+        <div style={{ width: '100%', padding: 14, background: '#fff', border: '1px solid #EDEAE3', borderRadius: 10, marginBottom: 20, boxSizing: 'border-box' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 8 }}>
+            <span style={{ color: '#8A867E' }}>Total</span>
+            <span style={{ fontWeight: 600, color: INK }}>TSh {selected.price.toLocaleString()}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
+            <span style={{ color: '#8A867E' }}>Paid via</span>
+            <span style={{ color: INK }}>M-Pesa</span>
+          </div>
+        </div>
+        <button onClick={() => setScreen('nearby')} style={{ width: '100%', padding: '12px 0', borderRadius: 10, border: 'none', background: TEAL, color: '#fff', fontSize: 13.5, fontWeight: 600, cursor: 'pointer' }}>
+          Done
+        </button>
+      </div>
+    );
+  }
+
+  return null;
+}
+
+function HostApp() {
+  const [rooms, setRooms] = useState(INITIAL_ROOMS.slice(0, 3).map(r => ({ ...r, label: r.type })));
+  const [requests, setRequests] = useState(REQUESTS);
+  const [bookingsThisWeek, setBookingsThisWeek] = useState(12);
+  const [earnings, setEarnings] = useState(340000);
+
+  const toggle = (id) => {
+    setRooms(rs => rs.map(r => r.id === id ? { ...r, available: !r.available, expiresInMin: !r.available ? 180 : 0 } : r));
+  };
+  const refresh = (id) => {
+    setRooms(rs => rs.map(r => r.id === id ? { ...r, expiresInMin: 180 } : r));
+  };
+  const respond = (id, accept) => {
+    const req = requests.find(r => r.id === id);
+    setRequests(rs => rs.filter(r => r.id !== id));
+    if (accept && req) {
+      setBookingsThisWeek(b => b + 1);
+      const room = rooms.find(r => req.room.includes(r.label));
+      const price = room ? room.price : 20000;
+      setEarnings(e => e + price);
+    }
+  };
+
+  const activeCount = rooms.filter(r => r.available).length;
+
+  return (
+    <>
+      <div style={{ padding: '14px 16px', background: CREAM, borderBottom: '1px solid #EDEAE3' }}>
+        <span style={{ fontSize: 14, fontWeight: 600, color: INK }}>Baraka Guest House</span>
+        <p style={{ fontSize: 11.5, color: '#8A867E', margin: '2px 0 0' }}>{rooms.length} rooms listed · {activeCount} live now</p>
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto' }}>
+        {requests.length > 0 && (
+          <div style={{ padding: '12px 16px 4px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <Bell size={13} color={OCHRE} />
+              <span style={{ fontSize: 11.5, fontWeight: 600, color: INK }}>Incoming requests</span>
+            </div>
+            {requests.map(req => (
+              <div key={req.id} style={{ background: '#fff', border: '1px solid #EDEAE3', borderRadius: 10, padding: 10, marginBottom: 8 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: INK }}>{req.name}</span>
+                  <span style={{ fontSize: 10.5, color: '#8A867E' }}>{req.time}</span>
+                </div>
+                <p style={{ fontSize: 11.5, color: '#6B675F', margin: '2px 0 8px' }}>{req.room}</p>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button onClick={() => respond(req.id, true)} style={{ flex: 1, padding: '7px 0', borderRadius: 8, border: 'none', background: TEAL, color: '#fff', fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>Accept</button>
+                  <button onClick={() => respond(req.id, false)} style={{ flex: 1, padding: '7px 0', borderRadius: 8, border: '1px solid #EDEAE3', background: 'transparent', color: '#8A867E', fontSize: 11.5, cursor: 'pointer' }}>Decline</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div style={{ padding: '10px 16px 4px' }}>
+          <span style={{ fontSize: 11.5, fontWeight: 600, color: INK }}>Your rooms</span>
+        </div>
+        {rooms.map(room => (
+          <div key={room.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '11px 16px', borderBottom: '1px solid #EDEAE3' }}>
+            <div style={{ flex: 1, minWidth: 0, paddingRight: 10 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: INK }}>Room {room.id} — {room.label}</span>
+              <div style={{ marginTop: 3, display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ width: 6, height: 6, borderRadius: 999, background: room.available ? TEAL : '#B8B4AB' }} />
+                <span style={{ fontSize: 11, color: room.available ? TEAL_DARK : '#8A867E' }}>
+                  {room.available ? `Available · expires in ${Math.floor(room.expiresInMin / 60)}h ${room.expiresInMin % 60}m` : 'Occupied'}
+                </span>
+                {room.available && room.expiresInMin < 200 && (
+                  <button onClick={() => refresh(room.id)} title="Refresh availability" style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0, display: 'flex' }}>
+                    <RefreshCw size={11} color={OCHRE} />
+                  </button>
+                )}
+              </div>
+            </div>
+            <button
+              onClick={() => toggle(room.id)}
+              style={{ width: 40, height: 22, borderRadius: 11, border: 'none', cursor: 'pointer', position: 'relative', flexShrink: 0, background: room.available ? TEAL : '#E3E0D8', transition: 'background 0.15s' }}
+            >
+              <span style={{ position: 'absolute', top: 2, width: 18, height: 18, borderRadius: 999, background: '#fff', left: room.available ? 20 : 2, transition: 'left 0.15s' }} />
+            </button>
+          </div>
+        ))}
+
+        <div style={{ margin: '14px 16px', padding: 12, background: '#FBEAD8', borderRadius: 10, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          <Clock size={14} color={OCHRE} style={{ marginTop: 1, flexShrink: 0 }} />
+          <p style={{ fontSize: 11, color: '#8A4A0E', margin: 0, lineHeight: 1.5 }}>
+            Rooms marked available auto-switch to unavailable after 3 hours unless refreshed — so clients never arrive to a full house.
+          </p>
+        </div>
+      </div>
+
+      <div style={{ padding: '12px 16px', borderTop: '1px solid #EDEAE3', background: '#fff' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <TrendingUp size={13} color={TEAL} />
+            <span style={{ fontSize: 11.5, color: '#6B675F' }}>This week</span>
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 600, color: INK }}>
+            TSh {earnings.toLocaleString()} · {bookingsThisWeek} bookings
+          </span>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function RoomaPrototype() {
+  const [mode, setMode] = useState('client');
+
+  return (
+    <div style={{ minHeight: 720, width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 20, padding: '32px 16px', boxSizing: 'border-box', background: '#F4F2EE', fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ width: 26, height: 26, borderRadius: 7, background: TEAL, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <Home size={14} color="#fff" strokeWidth={2} />
+          </div>
+          <span style={{ fontSize: 16, fontWeight: 700, color: INK, letterSpacing: -0.3 }}>Rooma</span>
+        </div>
+        <div style={{ display: 'flex', gap: 2, background: '#EDEAE3', borderRadius: 10, padding: 3 }}>
+          {['client', 'host'].map(m => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              style={{ padding: '7px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12.5, fontWeight: 600, background: mode === m ? '#fff' : 'transparent', color: mode === m ? INK : '#8A867E', boxShadow: mode === m ? '0 1px 3px rgba(0,0,0,0.08)' : 'none' }}
+            >
+              {m === 'client' ? 'Client app' : 'Host app'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <PhoneChrome>
+        {mode === 'client' ? <ClientApp /> : <HostApp />}
+      </PhoneChrome>
+
+      <p style={{ fontSize: 11, color: '#B8B4AB', textAlign: 'center', maxWidth: 300 }}>
+        Clickable demo with sample data — not connected to real payments, GPS, or a backend.
+      </p>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<RoomaPrototype />);
+</script>
+</body>
+</html>
