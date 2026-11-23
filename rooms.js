@@ -100,8 +100,23 @@ let roomsRef = null;
 let bookingsRef = null;
 
 function isCurrentUserAdmin(user) {
-  if (!user || !user.email) return false;
-  return ADMIN_EMAILS.includes(user.email.trim().toLowerCase());
+  const email = (user && user.email ? user.email : "").trim().toLowerCase();
+  if (!email) return false;
+  return ADMIN_EMAILS.some((adminEmail) => adminEmail.trim().toLowerCase() === email);
+}
+
+function syncAdminTabVisibility() {
+  isAdmin = isCurrentUserAdmin(currentUser || auth.currentUser);
+  if (!adminModeTab) return;
+  if (isAdmin) {
+    adminModeTab.classList.remove("hidden");
+  } else {
+    adminModeTab.classList.add("hidden");
+    adminModeTab.classList.remove("active");
+    if (adminSection && !adminSection.classList.contains("hidden")) {
+      showSection("guest");
+    }
+  }
 }
 
 function normalizePhone(rawPhone) {
@@ -167,6 +182,10 @@ function formatBookedWhen(ts) {
 }
 
 function showSection(sectionName) {
+  if (sectionName === "admin" && !isCurrentUserAdmin(currentUser || auth.currentUser)) {
+    sectionName = "guest";
+  }
+
   guestSection.classList.toggle("hidden", sectionName !== "guest");
   bookingSection.classList.toggle("hidden", sectionName !== "booking");
   hostSection.classList.toggle("hidden", sectionName !== "host");
@@ -176,7 +195,9 @@ function showSection(sectionName) {
 
   guestModeTab.classList.toggle("active", sectionName === "guest" || sectionName === "booking");
   hostModeTab.classList.toggle("active", sectionName === "host");
-  adminModeTab.classList.toggle("active", sectionName === "admin");
+  if (adminModeTab) {
+    adminModeTab.classList.toggle("active", sectionName === "admin");
+  }
 
   bottomHomeBtn.classList.toggle("active", sectionName === "guest" || sectionName === "booking");
   bottomActivityBtn.classList.toggle("active", sectionName === "activity");
@@ -188,13 +209,19 @@ function showSection(sectionName) {
   if (sectionName === "account") {
     populateAccountForm();
   }
+  if (sectionName === "admin") {
+    renderAdminPanel();
+  }
 }
 
 guestModeTab.addEventListener("click", () => showSection("guest"));
 hostModeTab.addEventListener("click", () => showSection("host"));
-adminModeTab.addEventListener("click", () => {
-  if (isAdmin) showSection("admin");
-});
+if (adminModeTab) {
+  adminModeTab.addEventListener("click", () => {
+    syncAdminTabVisibility();
+    if (isAdmin) showSection("admin");
+  });
+}
 backToRoomsBtn.addEventListener("click", () => showSection("guest"));
 
 bottomHomeBtn.addEventListener("click", () => showSection("guest"));
@@ -215,6 +242,7 @@ function populateAccountForm() {
 }
 
 window.onRoomaProfileUpdated = () => {
+  syncAdminTabVisibility();
   populateAccountForm();
   renderActivityFeed();
 };
@@ -500,6 +528,7 @@ window.setBookingStatus = async (bookingId, nextStatus) => {
 
 // Admin: Approve Room
 window.approveRoom = async (roomId) => {
+  syncAdminTabVisibility();
   if (!isAdmin) return;
   await update(ref(db, `rooms/${roomId}`), {
     approvalStatus: "approved",
@@ -509,6 +538,7 @@ window.approveRoom = async (roomId) => {
 
 // Admin: Reject Only (keeps record marked rejected)
 window.rejectRoomOnly = async (roomId) => {
+  syncAdminTabVisibility();
   if (!isAdmin) return;
   await update(ref(db, `rooms/${roomId}`), {
     approvalStatus: "rejected",
@@ -518,6 +548,7 @@ window.rejectRoomOnly = async (roomId) => {
 
 // Admin: Reject & Delete Room from System
 window.rejectAndDeleteRoom = async (roomId, encodedTitle) => {
+  syncAdminTabVisibility();
   if (!isAdmin) return;
   const title = decodeURIComponent(encodedTitle || "this room");
   const ok = confirm(`Rooma Admin: Reject and permanently delete "${title}" from the system?`);
@@ -1055,6 +1086,7 @@ function renderRooms() {
 
   renderHostBookings();
   renderActivityFeed();
+  syncAdminTabVisibility();
 
   if (isAdmin) {
     renderAdminPanel();
@@ -1165,8 +1197,7 @@ function renderAdminPanel() {
 // Subscribe to Realtime Database rooms & bookings when signed in
 onAuthStateChanged(auth, (user) => {
   currentUser = user;
-  isAdmin = isCurrentUserAdmin(user);
-  adminModeTab.classList.toggle("hidden", !isAdmin);
+  syncAdminTabVisibility();
 
   if (user) {
     populateAccountForm();
