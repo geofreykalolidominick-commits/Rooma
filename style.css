@@ -423,10 +423,10 @@ body {
 }
 
 .distance-line {
-  margin-top: 4px;
-  font-size: 0.8rem;
+  margin-top: 3px;
+  font-size: 0.82rem;
   font-weight: 700;
-  color: #0369a1;
+  color: #15803d;
 }
 
 .meta-line {
@@ -462,13 +462,32 @@ body {
 .btn-small {
   border: none;
   border-radius: 10px;
-  padding: 8px 14px;
-  font-size: 0.84rem;
+  padding: 8px 12px;
+  font-size: 0.82rem;
   font-weight: 700;
   cursor: pointer;
   background: var(--sky-deep);
   color: #ffffff;
   text-decoration: none;
+  text-align: center;
+}
+
+/* Host 3/4 availability + 1/4 red delete row */
+.host-card-actions {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.host-toggle-btn {
+  flex: 3;
+}
+
+.host-delete-btn {
+  flex: 1;
+  background: #dc2626 !important;
+  color: #ffffff !important;
+  padding: 8px 6px;
 }
 
 /* ================= BOOKING SUMMARY & CONFIRMATION ================= */
@@ -667,9 +686,45 @@ body {
 }
 
 .admin-btn-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
   gap: 8px;
+  width: 100%;
+}
+
+.admin-approve-btn {
+  flex: 1;
+  background: #16a34a !important;
+}
+
+.split-reject-btn {
+  flex: 1.35;
+  display: flex;
+  border-radius: 10px;
+  overflow: hidden;
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.split-reject-left,
+.split-reject-right {
+  flex: 1;
+  border: none;
+  padding: 8px 6px;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #ffffff;
+  cursor: pointer;
+  text-align: center;
+}
+
+.split-reject-left {
+  background: #991b1b;
+  border-right: 1px solid rgba(255, 255, 255, 0.35);
+}
+
+.split-reject-right {
+  background: #dc2626;
 }
 
 @media (max-width: 520px) {
