@@ -1,4 +1,4 @@
-import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+import { onAuthStateChanged, updateProfile } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 import {
   ref,
   push,
@@ -17,9 +17,15 @@ const guestModeTab = document.getElementById("guestModeTab");
 const hostModeTab = document.getElementById("hostModeTab");
 const adminModeTab = document.getElementById("adminModeTab");
 
+const bottomHomeBtn = document.getElementById("bottomHomeBtn");
+const bottomActivityBtn = document.getElementById("bottomActivityBtn");
+const bottomAccountBtn = document.getElementById("bottomAccountBtn");
+
 const guestSection = document.getElementById("guestSection");
 const bookingSection = document.getElementById("bookingSection");
 const hostSection = document.getElementById("hostSection");
+const activitySection = document.getElementById("activitySection");
+const accountSection = document.getElementById("accountSection");
 const adminSection = document.getElementById("adminSection");
 
 // Guest Finder Elements
@@ -40,6 +46,7 @@ const bookingTotalText = document.getElementById("bookingTotalText");
 const confirmBookingBtn = document.getElementById("confirmBookingBtn");
 const bookingPendingBox = document.getElementById("bookingPendingBox");
 const bookingPendingRefText = document.getElementById("bookingPendingRefText");
+const callHostPendingBtn = document.getElementById("callHostPendingBtn");
 const bookingConfirmedBox = document.getElementById("bookingConfirmedBox");
 const bookingRefText = document.getElementById("bookingRefText");
 const openDirectionsBtn = document.getElementById("openDirectionsBtn");
@@ -55,6 +62,16 @@ const photoPreviewWrap = document.getElementById("photoPreviewWrap");
 const photoPreviewImg = document.getElementById("photoPreviewImg");
 const clearPhotoBtn = document.getElementById("clearPhotoBtn");
 const hostFeedback = document.getElementById("hostFeedback");
+
+// Activity & Account Elements
+const activityFeedList = document.getElementById("activityFeedList");
+const accountMetaText = document.getElementById("accountMetaText");
+const accountProfileForm = document.getElementById("accountProfileForm");
+const accountNameInput = document.getElementById("accountNameInput");
+const accountPhoneInput = document.getElementById("accountPhoneInput");
+const accountEmailDisplay = document.getElementById("accountEmailDisplay");
+const saveAccountBtn = document.getElementById("saveAccountBtn");
+const accountFeedback = document.getElementById("accountFeedback");
 
 // Admin Elements
 const adminStatsBar = document.getElementById("adminStatsBar");
@@ -83,15 +100,37 @@ function isCurrentUserAdmin(user) {
   return ADMIN_EMAILS.includes(user.email.trim().toLowerCase());
 }
 
+function normalizePhone(rawPhone) {
+  const digits = (rawPhone || "").replace(/[^\d+]/g, "").trim();
+  if (/^\+255[67]\d{8}$/.test(digits)) return digits;
+  if (/^255[67]\d{8}$/.test(digits)) return `+${digits}`;
+  if (/^0[67]\d{8}$/.test(digits)) return `+255${digits.slice(1)}`;
+  if (/^\+\d{8,15}$/.test(digits)) return digits;
+  return null;
+}
+
 function showSection(sectionName) {
   guestSection.classList.toggle("hidden", sectionName !== "guest");
   bookingSection.classList.toggle("hidden", sectionName !== "booking");
   hostSection.classList.toggle("hidden", sectionName !== "host");
+  activitySection.classList.toggle("hidden", sectionName !== "activity");
+  accountSection.classList.toggle("hidden", sectionName !== "account");
   adminSection.classList.toggle("hidden", sectionName !== "admin");
 
   guestModeTab.classList.toggle("active", sectionName === "guest" || sectionName === "booking");
   hostModeTab.classList.toggle("active", sectionName === "host");
   adminModeTab.classList.toggle("active", sectionName === "admin");
+
+  bottomHomeBtn.classList.toggle("active", sectionName === "guest" || sectionName === "booking");
+  bottomActivityBtn.classList.toggle("active", sectionName === "activity");
+  bottomAccountBtn.classList.toggle("active", sectionName === "account");
+
+  if (sectionName === "activity") {
+    renderActivityFeed();
+  }
+  if (sectionName === "account") {
+    populateAccountForm();
+  }
 }
 
 guestModeTab.addEventListener("click", () => showSection("guest"));
@@ -100,6 +139,71 @@ adminModeTab.addEventListener("click", () => {
   if (isAdmin) showSection("admin");
 });
 backToRoomsBtn.addEventListener("click", () => showSection("guest"));
+
+bottomHomeBtn.addEventListener("click", () => showSection("guest"));
+bottomActivityBtn.addEventListener("click", () => showSection("activity"));
+bottomAccountBtn.addEventListener("click", () => showSection("account"));
+
+function populateAccountForm() {
+  if (!currentUser) return;
+  const profile = window.roomaUserProfile || {};
+  accountNameInput.value = profile.fullName || currentUser.displayName || "";
+  accountPhoneInput.value = profile.phone || "";
+  accountEmailDisplay.value = currentUser.email || profile.email || "";
+  const roleLabel = isAdmin ? "Admin" : (profile.role || "guest").toUpperCase();
+  const updatedText = profile.updatedAt
+    ? ` • Last updated ${new Date(profile.updatedAt).toLocaleDateString()}`
+    : "";
+  accountMetaText.textContent = `Account Type: ${roleLabel}${updatedText}`;
+}
+
+window.onRoomaProfileUpdated = () => {
+  populateAccountForm();
+  renderActivityFeed();
+};
+
+accountProfileForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (!currentUser) return;
+
+  const fullName = accountNameInput.value.trim();
+  const cleanPhone = normalizePhone(accountPhoneInput.value);
+
+  if (!fullName) {
+    accountFeedback.textContent = "Rooma: Please enter your full name.";
+    return;
+  }
+  if (!cleanPhone) {
+    accountFeedback.textContent = "Rooma: Please enter a valid phone number (e.g., +255712345678 or 0712345678).";
+    return;
+  }
+
+  try {
+    saveAccountBtn.disabled = true;
+    saveAccountBtn.textContent = "Saving...";
+    const nextProfile = {
+      ...(window.roomaUserProfile || {}),
+      fullName,
+      phone: cleanPhone,
+      email: currentUser.email || window.roomaUserProfile?.email || "",
+      role: window.roomaUserProfile?.role || "guest",
+      updatedAt: Date.now()
+    };
+
+    await updateProfile(currentUser, { displayName: fullName });
+    await set(ref(db, `users/${currentUser.uid}`), nextProfile);
+
+    if (typeof window.refreshRoomaProfile === "function") {
+      await window.refreshRoomaProfile(nextProfile);
+    }
+    accountFeedback.textContent = "Rooma: Account details saved.";
+  } catch (err) {
+    accountFeedback.textContent = "Rooma: Could not save account — " + err.message;
+  } finally {
+    saveAccountBtn.disabled = false;
+    saveAccountBtn.textContent = "Save Account Changes";
+  }
+});
 
 // Compress image to lightweight JPEG data URL for free Realtime DB storage
 function compressImage(file, maxWidth = 600, quality = 0.65) {
@@ -279,7 +383,7 @@ addRoomForm.addEventListener("submit", async (e) => {
     const newRoomRef = push(ref(db, "rooms"));
     await set(newRoomRef, {
       hostId: currentUser.uid,
-      hostName: currentUser.displayName || currentUser.email,
+      hostName: window.roomaUserProfile?.fullName || currentUser.displayName || currentUser.email,
       guesthouseName: document.getElementById("ghNameInput").value.trim(),
       roomTitle: document.getElementById("roomTitleInput").value.trim(),
       city: document.getElementById("cityInput").value.trim(),
@@ -379,6 +483,7 @@ function syncGuestBookingStatusUI() {
   if (!booking) return;
 
   const shortCode = `RM-${booking.id.slice(-4).toUpperCase()}`;
+  const hostTel = `tel:${(booking.hostPhone || activeBookingRoom.hostPhone || "").replace(/\s+/g, "")}`;
 
   if (booking.status === "approved") {
     confirmBookingForm.classList.add("hidden");
@@ -390,7 +495,7 @@ function syncGuestBookingStatusUI() {
     openDirectionsBtn.href = userCoords
       ? `https://www.google.com/maps/dir/?api=1&origin=${userCoords.lat},${userCoords.lng}&destination=${dest}&travelmode=driving`
       : `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
-    callHostConfirmedBtn.href = `tel:${activeBookingRoom.hostPhone}`;
+    callHostConfirmedBtn.href = hostTel;
   } else if (booking.status === "declined") {
     confirmBookingForm.classList.remove("hidden");
     bookingPendingBox.classList.add("hidden");
@@ -403,6 +508,7 @@ function syncGuestBookingStatusUI() {
     bookingConfirmedBox.classList.add("hidden");
     bookingPendingBox.classList.remove("hidden");
     bookingPendingRefText.textContent = `Reference: #${shortCode} • ${booking.nights} night(s) • ${Number(booking.totalTzs || 0).toLocaleString()} TZS`;
+    callHostPendingBtn.href = hostTel;
   }
 }
 
@@ -419,8 +525,8 @@ window.openBookingPage = (roomId) => {
 
   const savedPhone = window.roomaUserProfile?.phone || "";
   savedGuestPhoneNote.textContent = savedPhone
-    ? `Your saved contact (${savedPhone}) will be shared with the host upon approval.`
-    : "Your account contact will be shared with the host upon approval.";
+    ? `Your saved contact (${savedPhone}) will be shared with the host.`
+    : "Your account contact will be shared with the host.";
 
   confirmBookingForm.classList.remove("hidden");
   bookingPendingBox.classList.add("hidden");
@@ -448,7 +554,6 @@ window.openBookingPage = (roomId) => {
     </div>
   `;
 
-  // If the current guest already has a pending/approved booking for this room, show its live status
   const existing = currentUser
     ? allBookings.find(
         (b) =>
@@ -497,16 +602,141 @@ confirmBookingForm.addEventListener("submit", async (e) => {
     });
 
     activeBookingId = newBookingRef.key;
-    confirmBookingForm.classList.add("hidden");
-    bookingConfirmedBox.classList.add("hidden");
-    bookingPendingBox.classList.remove("hidden");
-    bookingPendingRefText.textContent = `Reference: #RM-${newBookingRef.key.slice(-4).toUpperCase()} • ${nights} night(s) • ${totalTzs.toLocaleString()} TZS`;
+    syncGuestBookingStatusUI();
   } catch (err) {
     alert("Rooma: Booking request failed — " + err.message);
     confirmBookingBtn.disabled = false;
     confirmBookingBtn.textContent = "Request Booking";
   }
 });
+
+function renderActivityFeed() {
+  if (!currentUser) {
+    activityFeedList.innerHTML = "";
+    return;
+  }
+
+  const items = [];
+
+  // 1. Bookings placed as a guest
+  allBookings
+    .filter((b) => b.guestId === currentUser.uid)
+    .forEach((b) => {
+      const status = b.status || "pending_host";
+      const badgeClass = status === "approved" ? "avail" : status === "declined" ? "occ" : "pending";
+      const badgeLabel =
+        status === "approved" ? "Approved" : status === "declined" ? "Declined" : "Waiting Host";
+      const hostPhoneClean = (b.hostPhone || "").replace(/\s+/g, "");
+      items.push({
+        ts: b.updatedAt || b.createdAt || 0,
+        html: `
+          <div class="room-card">
+            <div>
+              <div class="room-top">
+                <div>
+                  <div class="gh-name">Booking • ${b.guesthouseName}</div>
+                  <div class="room-title">${b.roomTitle}</div>
+                </div>
+                <span class="badge ${badgeClass}">${badgeLabel}</span>
+              </div>
+              <p class="meta-line" style="margin-top:6px;">${b.nights} night(s) • <strong>${Number(b.totalTzs || 0).toLocaleString()} TZS</strong></p>
+              <p class="sub-meta" style="margin-top:4px;">Ref: #RM-${b.id.slice(-4).toUpperCase()}</p>
+            </div>
+            <div class="confirmed-actions">
+              <button type="button" class="btn-small" onclick="openBookingPage('${b.roomId}')">View Booking</button>
+              <a href="tel:${hostPhoneClean}" class="action-btn call-btn">📞 Call Host</a>
+            </div>
+          </div>
+        `
+      });
+    });
+
+  // 2. Hosting listings uploaded by user
+  allRooms
+    .filter((r) => r.hostId === currentUser.uid)
+    .forEach((r) => {
+      const appStatus = r.approvalStatus || "pending";
+      const badgeClass = appStatus === "approved" ? "avail" : appStatus === "rejected" ? "occ" : "pending";
+      const badgeLabel =
+        appStatus === "approved" ? "Approved Listing" : appStatus === "rejected" ? "Rejected Listing" : "Pending Review";
+      items.push({
+        ts: r.createdAt || 0,
+        html: `
+          <div class="room-card">
+            <div>
+              <div class="room-top">
+                <div>
+                  <div class="gh-name">Hosting • ${r.guesthouseName}</div>
+                  <div class="room-title">${r.roomTitle}</div>
+                </div>
+                <span class="badge ${badgeClass}">${badgeLabel}</span>
+              </div>
+              <p class="meta-line" style="margin-top:6px;">📍 ${r.area}, ${r.city} • ${Number(r.nightlyPrice).toLocaleString()} TZS/night</p>
+              <p class="sub-meta" style="margin-top:4px;">Occupancy: ${r.availability === "available_now" ? "Available Now" : "Occupied"}</p>
+            </div>
+          </div>
+        `
+      });
+    });
+
+  // 3. Incoming bookings on user's hosted rooms
+  allBookings
+    .filter((b) => b.hostId === currentUser.uid && b.guestId !== currentUser.uid)
+    .forEach((b) => {
+      const status = b.status || "pending_host";
+      const badgeClass = status === "approved" ? "avail" : status === "declined" ? "occ" : "pending";
+      const badgeLabel =
+        status === "approved" ? "Approved" : status === "declined" ? "Declined" : "Incoming Request";
+      items.push({
+        ts: b.updatedAt || b.createdAt || 0,
+        html: `
+          <div class="room-card">
+            <div>
+              <div class="room-top">
+                <div>
+                  <div class="gh-name">Guest Request • ${b.guesthouseName}</div>
+                  <div class="room-title">${b.roomTitle}</div>
+                </div>
+                <span class="badge ${badgeClass}">${badgeLabel}</span>
+              </div>
+              <p class="meta-line" style="margin-top:6px;">Guest: ${b.guestName} (${b.guestPhone})</p>
+              <p class="sub-meta" style="margin-top:4px;">${b.nights} night(s) • <strong>${Number(b.totalTzs || 0).toLocaleString()} TZS</strong></p>
+            </div>
+          </div>
+        `
+      });
+    });
+
+  // 4. Account profile update activity
+  const profile = window.roomaUserProfile;
+  if (profile?.updatedAt) {
+    items.push({
+      ts: profile.updatedAt,
+      html: `
+        <div class="room-card">
+          <div>
+            <div class="room-top">
+              <div>
+                <div class="gh-name">Account Activity</div>
+                <div class="room-title">Profile Details Updated</div>
+              </div>
+              <span class="badge avail">Saved</span>
+            </div>
+            <p class="meta-line" style="margin-top:6px;">Name: ${profile.fullName || ""} • Phone: ${profile.phone || "—"}</p>
+          </div>
+        </div>
+      `
+    });
+  }
+
+  items.sort((a, b) => b.ts - a.ts);
+
+  if (items.length === 0) {
+    activityFeedList.innerHTML = `<div class="panel" style="grid-column:1/-1;text-align:center;color:#64748b;">No bookings, listings, or account activities recorded yet.</div>`;
+  } else {
+    activityFeedList.innerHTML = items.map((i) => i.html).join("");
+  }
+}
 
 function renderAdminActionRow(room) {
   const safeTitle = encodeURIComponent(room.roomTitle || "Room");
@@ -595,7 +825,6 @@ function renderRooms() {
     });
   }
 
-  // Only approved rooms appear on the public Guest Finder feed
   const approvedRooms = enriched.filter((r) => r.approvalStatus === "approved");
 
   const filtered = approvedRooms.filter((r) => {
@@ -656,7 +885,6 @@ function renderRooms() {
       .join("");
   }
 
-  // Host's own rooms (3/4 availability toggle + 1/4 red Delete button)
   const mine = allRooms.filter((r) => currentUser && r.hostId === currentUser.uid);
   if (mine.length === 0) {
     myRoomsList.innerHTML = `<div class="panel" style="grid-column:1/-1;text-align:center;color:#64748b;">You haven't uploaded any rooms yet.</div>`;
@@ -711,6 +939,7 @@ function renderRooms() {
   }
 
   renderHostBookings();
+  renderActivityFeed();
 
   if (isAdmin) {
     renderAdminPanel();
@@ -820,6 +1049,7 @@ onAuthStateChanged(auth, (user) => {
   adminModeTab.classList.toggle("hidden", !isAdmin);
 
   if (user) {
+    populateAccountForm();
     requestGuestLocation(true);
 
     roomsRef = ref(db, "rooms");
@@ -847,6 +1077,7 @@ onAuthStateChanged(auth, (user) => {
           );
 
       renderHostBookings();
+      renderActivityFeed();
       if (isAdmin) renderAdminPanel();
       syncGuestBookingStatusUI();
     });
