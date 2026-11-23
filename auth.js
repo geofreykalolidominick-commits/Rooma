@@ -1,7 +1,7 @@
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
-  signInAnonymously,
+  sendPasswordResetEmail,
   updateProfile,
   onAuthStateChanged,
   signOut
@@ -9,32 +9,27 @@ import {
 import {
   ref,
   set,
-  get,
-  update
+  get
 } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 import { auth, db } from "./firebase-config.js";
 
 const authView = document.getElementById("authView");
 const appView = document.getElementById("appView");
 
-const tabGuestQuickBtn = document.getElementById("tabGuestQuickBtn");
 const tabLoginBtn = document.getElementById("tabLoginBtn");
 const tabRegisterBtn = document.getElementById("tabRegisterBtn");
 
-const guestQuickForm = document.getElementById("guestQuickForm");
 const loginForm = document.getElementById("loginForm");
 const registerForm = document.getElementById("registerForm");
 
 const goToLoginLink = document.getElementById("goToLoginLink");
 const goToRegisterLink = document.getElementById("goToRegisterLink");
-const goToLoginFromRegLink = document.getElementById("goToLoginFromRegLink");
+const forgotPasswordLink = document.getElementById("forgotPasswordLink");
+const forgotEmailLink = document.getElementById("forgotEmailLink");
 const authStatus = document.getElementById("authStatus");
 
 const welcomeUserText = document.getElementById("welcomeUserText");
 const guestModeTab = document.getElementById("guestModeTab");
-const hostModeTab = document.getElementById("hostModeTab");
-const guestSection = document.getElementById("guestSection");
-const hostSection = document.getElementById("hostSection");
 const logoutBtn = document.getElementById("logoutBtn");
 
 function normalizePhone(rawPhone) {
@@ -55,9 +50,9 @@ function formatRoomaError(err) {
     "auth/email-already-in-use": "Rooma: This email is already registered. Please log in instead.",
     "auth/weak-password": "Rooma: Password must be at least 6 characters long.",
     "auth/invalid-email": "Rooma: Please enter a valid email address.",
-    "auth/too-many-requests": "Rooma: Too many failed attempts. Please wait a moment and try again.",
-    "auth/network-request-failed": "Rooma: Network error. Please check your internet connection.",
-    "auth/operation-not-allowed": "Rooma: Quick guest sign-in is disabled in Firebase Auth settings."
+    "auth/missing-email": "Rooma: Please type your email address in the Email box first.",
+    "auth/too-many-requests": "Rooma: Too many attempts. Please wait a moment and try again.",
+    "auth/network-request-failed": "Rooma: Network error. Please check your internet connection."
   };
 
   if (map[code]) return map[code];
@@ -68,71 +63,56 @@ function formatRoomaError(err) {
   return `Rooma: ${cleanMsg}`;
 }
 
-function showAuthMessage(errOrMsg) {
+function showAuthMessage(errOrMsg, isInfo = false) {
   authStatus.textContent =
     typeof errOrMsg === "string" ? errOrMsg : formatRoomaError(errOrMsg);
+  authStatus.classList.toggle("info", isInfo);
   authStatus.classList.remove("hidden");
 }
 
 function clearAuthMessage() {
   authStatus.classList.add("hidden");
+  authStatus.classList.remove("info");
 }
 
 function switchTab(mode) {
-  tabGuestQuickBtn.classList.toggle("active", mode === "quick");
   tabLoginBtn.classList.toggle("active", mode === "login");
   tabRegisterBtn.classList.toggle("active", mode === "register");
 
-  guestQuickForm.classList.toggle("hidden", mode !== "quick");
   loginForm.classList.toggle("hidden", mode !== "login");
   registerForm.classList.toggle("hidden", mode !== "register");
   clearAuthMessage();
 }
 
-tabGuestQuickBtn.addEventListener("click", () => switchTab("quick"));
 tabLoginBtn.addEventListener("click", () => switchTab("login"));
 tabRegisterBtn.addEventListener("click", () => switchTab("register"));
 goToLoginLink.addEventListener("click", () => switchTab("login"));
 goToRegisterLink.addEventListener("click", () => switchTab("register"));
-goToLoginFromRegLink.addEventListener("click", () => switchTab("login"));
 
-// One-Time Guest Quick Start (Name + Valid Phone -> Straight to Find Rooms)
-guestQuickForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
+// Forgot Password Recovery
+forgotPasswordLink.addEventListener("click", async () => {
   clearAuthMessage();
+  const email = document.getElementById("loginEmail").value.trim();
 
-  const fullName = document.getElementById("quickGuestName").value.trim();
-  const cleanPhone = normalizePhone(document.getElementById("quickGuestPhone").value);
-  const btn = document.getElementById("quickGuestSubmitBtn");
-
-  if (!fullName) {
-    showAuthMessage("Rooma: Please enter your full name.");
-    return;
-  }
-  if (!cleanPhone) {
-    showAuthMessage("Rooma: Please enter a valid phone number (e.g., +255712345678 or 0712345678).");
+  if (!email) {
+    showAuthMessage("Rooma: Enter your account Email above first, then tap Forgot Password?", true);
     return;
   }
 
   try {
-    btn.disabled = true;
-    btn.textContent = "Opening Rooma...";
-
-    const cred = await signInAnonymously(auth);
-    await updateProfile(cred.user, { displayName: fullName });
-    await set(ref(db, `users/${cred.user.uid}`), {
-      fullName,
-      phone: cleanPhone,
-      role: "guest",
-      isQuickGuest: true,
-      createdAt: Date.now()
-    });
+    await sendPasswordResetEmail(auth, email);
+    showAuthMessage(`Rooma: Password reset link sent to ${email}. Check your inbox or spam folder.`, true);
   } catch (err) {
     showAuthMessage(err);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "Find Rooms Now";
   }
+});
+
+// Forgot Email Guidance
+forgotEmailLink.addEventListener("click", () => {
+  showAuthMessage(
+    "Rooma: Try any email address you normally use, or contact Rooma support/admin with your registered phone number to verify your account.",
+    true
+  );
 });
 
 // Register User (Email/Password + Valid Phone)
@@ -198,52 +178,41 @@ logoutBtn.addEventListener("click", async () => {
   await signOut(auth);
 });
 
-// Dashboard Tab Switching (Guest vs Host)
-guestModeTab.addEventListener("click", () => {
-  guestModeTab.classList.add("active");
-  hostModeTab.classList.remove("active");
-  guestSection.classList.remove("hidden");
-  hostSection.classList.add("hidden");
-});
+// Refresh Profile Helper for Account Editor
+window.refreshRoomaProfile = async (overrideProfile = null) => {
+  const user = auth.currentUser;
+  if (!user) return null;
 
-hostModeTab.addEventListener("click", () => {
-  hostModeTab.classList.add("active");
-  guestModeTab.classList.remove("active");
-  hostSection.classList.remove("hidden");
-  guestSection.classList.add("hidden");
-});
+  let profile = overrideProfile;
+  if (!profile) {
+    try {
+      const snap = await get(ref(db, `users/${user.uid}`));
+      if (snap.exists()) profile = snap.val();
+    } catch (_) {
+      // Fallback to auth displayName/email
+    }
+  }
+
+  window.roomaUserProfile = profile || {
+    fullName: user.displayName || user.email || "Member",
+    phone: "",
+    email: user.email || "",
+    role: "guest"
+  };
+
+  welcomeUserText.textContent = `Welcome, ${window.roomaUserProfile.fullName || user.displayName || user.email}`;
+  if (typeof window.onRoomaProfileUpdated === "function") {
+    window.onRoomaProfileUpdated(window.roomaUserProfile);
+  }
+  return window.roomaUserProfile;
+};
 
 // Listen for Auth State Changes (Always open directly to Find Rooms)
 onAuthStateChanged(auth, async (user) => {
   if (user) {
     authView.classList.add("hidden");
     appView.classList.remove("hidden");
-
-    let profile = null;
-    try {
-      const snap = await get(ref(db, `users/${user.uid}`));
-      if (snap.exists()) {
-        profile = snap.val();
-      } else if (user.isAnonymous) {
-        profile = {
-          fullName: user.displayName || "Guest",
-          phone: "",
-          role: "guest",
-          isQuickGuest: true
-        };
-        await update(ref(db, `users/${user.uid}`), profile);
-      }
-    } catch (_) {
-      // Fallback if profile read is temporarily unavailable
-    }
-
-    window.roomaUserProfile = profile || {
-      fullName: user.displayName || user.email || "Guest",
-      phone: "",
-      role: "guest"
-    };
-
-    welcomeUserText.textContent = `Welcome, ${window.roomaUserProfile.fullName || user.displayName || user.email}`;
+    await window.refreshRoomaProfile();
     guestModeTab.click();
   } else {
     window.roomaUserProfile = null;
