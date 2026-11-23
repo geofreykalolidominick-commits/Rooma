@@ -3,474 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Rooma — Guesthouses & Short Stays</title>
-  <style>
-    :root {
-      --bg-gradient: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 50%, #dbeafe 100%);
-      --card-bg: rgba(255, 255, 255, 0.95);
-      --sky-deep: #0284c7;
-      --text-dark: #0f172a;
-      --text-muted: #64748b;
-      --input-bg: #f1f5f9;
-      --border-light: #cbd5e1;
-      --green-bg: #dcfce7;
-      --green-text: #166534;
-      --red-bg: #fee2e2;
-      --red-text: #991b1b;
-    }
-
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    }
-
-    body {
-      min-height: 100vh;
-      background: var(--bg-gradient);
-      color: var(--text-dark);
-      padding: 16px;
-    }
-
-    .hidden {
-      display: none !important;
-    }
-
-    /* ================= AUTH SCREEN ================= */
-    .auth-wrapper {
-      min-height: calc(100vh - 32px);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding-top: 32px;
-    }
-
-    .brand-banner {
-      text-align: center;
-      margin-bottom: 42px;
-    }
-
-    .brand-banner h1 {
-      font-size: 2rem;
-      font-weight: 800;
-      color: var(--sky-deep);
-      letter-spacing: -0.5px;
-    }
-
-    .brand-banner p {
-      font-size: 0.9rem;
-      color: var(--text-muted);
-      margin-top: 4px;
-    }
-
-    .auth-card {
-      position: relative;
-      width: 100%;
-      max-width: 380px;
-      background: var(--card-bg);
-      border-radius: 26px;
-      padding: 54px 24px 26px;
-      box-shadow: 0 18px 40px rgba(2, 132, 199, 0.14);
-      border: 1px solid rgba(255, 255, 255, 0.9);
-    }
-
-    .avatar-badge {
-      position: absolute;
-      top: -36px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 72px;
-      height: 72px;
-      border-radius: 50%;
-      background: #dbeafe;
-      border: 4px solid #ffffff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 8px 20px rgba(2, 132, 199, 0.16);
-      color: #60a5fa;
-    }
-
-    .pill-switch {
-      display: flex;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 999px;
-      padding: 4px;
-      margin-bottom: 22px;
-    }
-
-    .pill-btn {
-      flex: 1;
-      border: none;
-      background: transparent;
-      padding: 10px 14px;
-      border-radius: 999px;
-      font-size: 0.95rem;
-      font-weight: 600;
-      color: var(--text-dark);
-      cursor: pointer;
-      transition: all 0.2s ease;
-    }
-
-    .pill-btn.active {
-      background: #93c5fd;
-      color: #0f172a;
-      box-shadow: 0 3px 10px rgba(147, 197, 253, 0.45);
-    }
-
-    .input-group {
-      position: relative;
-      margin-bottom: 14px;
-    }
-
-    .input-icon {
-      position: absolute;
-      left: 14px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: #334155;
-      display: flex;
-      align-items: center;
-      pointer-events: none;
-    }
-
-    .auth-input,
-    .auth-select {
-      width: 100%;
-      background: var(--input-bg);
-      border: 1px solid transparent;
-      border-radius: 14px;
-      padding: 13px 14px 13px 42px;
-      font-size: 0.95rem;
-      color: var(--text-dark);
-      outline: none;
-      transition: border-color 0.2s, background 0.2s;
-    }
-
-    .auth-input:focus,
-    .auth-select:focus {
-      background: #ffffff;
-      border-color: #60a5fa;
-    }
-
-    .primary-auth-btn {
-      width: 100%;
-      border: none;
-      border-radius: 999px;
-      padding: 13px;
-      margin-top: 6px;
-      background: #93c5fd;
-      color: #0f172a;
-      font-size: 1rem;
-      font-weight: 700;
-      cursor: pointer;
-      box-shadow: 0 6px 16px rgba(147, 197, 253, 0.45);
-      transition: transform 0.1s ease, background 0.2s ease;
-    }
-
-    .primary-auth-btn:hover {
-      background: #60a5fa;
-    }
-
-    .primary-auth-btn:disabled {
-      opacity: 0.6;
-      cursor: not-allowed;
-    }
-
-    .divider-or {
-      display: flex;
-      align-items: center;
-      text-align: center;
-      color: var(--text-muted);
-      font-size: 0.8rem;
-      margin: 16px 0 12px;
-    }
-
-    .divider-or::before,
-    .divider-or::after {
-      content: "";
-      flex: 1;
-      border-bottom: 1px solid #e2e8f0;
-    }
-
-    .divider-or span {
-      padding: 0 10px;
-    }
-
-    .switch-text {
-      text-align: center;
-      font-size: 0.85rem;
-      color: var(--text-dark);
-    }
-
-    .switch-text a {
-      color: var(--sky-deep);
-      font-weight: 700;
-      text-decoration: none;
-      cursor: pointer;
-    }
-
-    .auth-status {
-      margin-top: 12px;
-      padding: 10px 12px;
-      border-radius: 12px;
-      font-size: 0.83rem;
-      text-align: center;
-      background: #fee2e2;
-      color: #991b1b;
-    }
-
-    /* ================= MAIN ROOMA WEB APP ================= */
-    .app-shell {
-      max-width: 820px;
-      margin: 0 auto;
-    }
-
-    .topbar {
-      background: #ffffff;
-      border-radius: 18px;
-      padding: 14px 18px;
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      justify-content: space-between;
-      gap: 10px;
-      box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
-      margin-bottom: 16px;
-    }
-
-    .topbar-left h2 {
-      font-size: 1.35rem;
-      font-weight: 800;
-      color: var(--sky-deep);
-    }
-
-    .topbar-left p {
-      font-size: 0.82rem;
-      color: var(--text-muted);
-    }
-
-    .topbar-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .nav-tab {
-      border: 1px solid var(--border-light);
-      background: #f8fafc;
-      padding: 8px 14px;
-      border-radius: 999px;
-      font-size: 0.85rem;
-      font-weight: 700;
-      cursor: pointer;
-      color: var(--text-dark);
-    }
-
-    .nav-tab.active {
-      background: var(--sky-deep);
-      color: #ffffff;
-      border-color: var(--sky-deep);
-    }
-
-    .logout-btn {
-      border: none;
-      background: #fee2e2;
-      color: #991b1b;
-      padding: 8px 12px;
-      border-radius: 999px;
-      font-size: 0.82rem;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    .panel {
-      background: #ffffff;
-      border-radius: 18px;
-      padding: 16px;
-      box-shadow: 0 6px 20px rgba(15, 23, 42, 0.05);
-      margin-bottom: 16px;
-    }
-
-    .search-bar {
-      width: 100%;
-      padding: 12px 14px;
-      border-radius: 12px;
-      border: 1px solid var(--border-light);
-      background: #f8fafc;
-      font-size: 0.95rem;
-      margin-bottom: 10px;
-    }
-
-    .chips {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-    }
-
-    .chip {
-      border: 1px solid var(--border-light);
-      background: #f1f5f9;
-      padding: 6px 12px;
-      border-radius: 999px;
-      font-size: 0.82rem;
-      font-weight: 600;
-      cursor: pointer;
-    }
-
-    .chip.active {
-      background: var(--text-dark);
-      color: #ffffff;
-      border-color: var(--text-dark);
-    }
-
-    .rooms-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 14px;
-    }
-
-    .room-card {
-      background: #ffffff;
-      border-radius: 16px;
-      padding: 16px;
-      border: 1px solid #e2e8f0;
-      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
-      display: flex;
-      flex-direction: column;
-      justify-content: space-between;
-      gap: 10px;
-    }
-
-    .room-top {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: 8px;
-    }
-
-    .gh-name {
-      font-size: 0.75rem;
-      font-weight: 800;
-      color: var(--sky-deep);
-      text-transform: uppercase;
-    }
-
-    .room-title {
-      font-size: 1.05rem;
-      font-weight: 700;
-      margin-top: 2px;
-    }
-
-    .badge {
-      padding: 4px 10px;
-      border-radius: 999px;
-      font-size: 0.75rem;
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
-    .badge.avail {
-      background: var(--green-bg);
-      color: var(--green-text);
-    }
-
-    .badge.occ {
-      background: var(--red-bg);
-      color: var(--red-text);
-    }
-
-    .meta-line {
-      font-size: 0.85rem;
-      color: #334155;
-      line-height: 1.4;
-    }
-
-    .sub-meta {
-      font-size: 0.78rem;
-      color: var(--text-muted);
-    }
-
-    .room-bottom {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-top: 10px;
-      border-top: 1px solid #f1f5f9;
-    }
-
-    .price {
-      font-size: 1rem;
-      font-weight: 800;
-    }
-
-    .price span {
-      font-size: 0.78rem;
-      font-weight: 400;
-      color: var(--text-muted);
-    }
-
-    .btn-small {
-      border: none;
-      border-radius: 10px;
-      padding: 8px 12px;
-      font-size: 0.82rem;
-      font-weight: 700;
-      cursor: pointer;
-      background: var(--sky-deep);
-      color: #ffffff;
-      text-decoration: none;
-    }
-
-    .form-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-    }
-
-    .form-grid .full {
-      grid-column: 1 / -1;
-    }
-
-    .field-label {
-      display: block;
-      font-size: 0.78rem;
-      font-weight: 700;
-      margin-bottom: 4px;
-      color: #334155;
-    }
-
-    .field-input {
-      width: 100%;
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid var(--border-light);
-      background: #f8fafc;
-      font-size: 0.9rem;
-    }
-
-    .submit-room-btn {
-      width: 100%;
-      margin-top: 12px;
-      padding: 12px;
-      border: none;
-      border-radius: 12px;
-      background: var(--text-dark);
-      color: #ffffff;
-      font-size: 0.95rem;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    @media (max-width: 520px) {
-      .form-grid {
-        grid-template-columns: 1fr;
-      }
-    }
-  </style>
+  <title>Rooma — Guesthouses &amp; Short Stays</title>
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
@@ -595,12 +129,14 @@
           type="text"
           id="searchInput"
           class="search-bar"
-          placeholder="Search city, area, guesthouse, or landmark..."
+          placeholder="Search city, area, room type, guesthouse, or landmark..."
         />
         <div class="chips">
           <button type="button" id="filterAvailBtn" class="chip active">✓ Available Now</button>
           <button type="button" id="filterBudgetBtn" class="chip">≤ 35,000 TZS</button>
+          <button type="button" id="filterNearMeBtn" class="chip">📍 Near Me</button>
         </div>
+        <p id="distanceStatus" class="distance-status hidden"></p>
       </div>
 
       <div id="roomsList" class="rooms-grid"></div>
@@ -609,412 +145,103 @@
     <!-- HOST UPLOAD & MANAGE VIEW -->
     <div id="hostSection" class="hidden">
       <div class="panel">
-        <h3 style="margin-bottom: 12px;">Upload Guesthouse Room</h3>
+        <h3 class="section-title">Upload Guesthouse Room</h3>
         <form id="addRoomForm" class="form-grid">
           <div class="full">
-            <label class="field-label">Guesthouse Name *</label>
+            <label class="field-label" for="ghNameInput">Guesthouse Name *</label>
             <input type="text" id="ghNameInput" class="field-input" placeholder="e.g., Pwani Breeze Guesthouse" required />
           </div>
+
           <div class="full">
-            <label class="field-label">Room Title *</label>
-            <input type="text" id="roomTitleInput" class="field-input" placeholder="e.g., Self-Contained Double Room" required />
+            <label class="field-label" for="roomTitleInput">Room Title / Type *</label>
+            <input
+              type="text"
+              id="roomTitleInput"
+              class="field-input"
+              list="roomTitleSuggestions"
+              placeholder="Tap to pick or type room type..."
+              required
+            />
+            <datalist id="roomTitleSuggestions">
+              <option value="Single Room"></option>
+              <option value="Master Single Room"></option>
+              <option value="Master Double Room"></option>
+              <option value="Standard Double Room"></option>
+              <option value="Self-Contained Double Room"></option>
+              <option value="Executive Twin Room"></option>
+              <option value="Short-Stay Studio"></option>
+            </datalist>
           </div>
+
           <div>
-            <label class="field-label">City *</label>
+            <label class="field-label" for="cityInput">City *</label>
             <input type="text" id="cityInput" class="field-input" placeholder="e.g., Tanga" required />
           </div>
+
           <div>
-            <label class="field-label">Area / Ward *</label>
+            <label class="field-label" for="areaInput">Area / Ward *</label>
             <input type="text" id="areaInput" class="field-input" placeholder="e.g., Ras Kazone" required />
           </div>
+
           <div class="full">
-            <label class="field-label">Nearby Landmark</label>
+            <label class="field-label" for="landmarkInput">Nearby Landmark</label>
             <input type="text" id="landmarkInput" class="field-input" placeholder="e.g., Near main bus stand" />
           </div>
+
           <div>
-            <label class="field-label">Nightly Price (TZS) *</label>
-            <input type="number" id="priceInput" class="field-input" placeholder="35000" required />
+            <label class="field-label" for="priceInput">Nightly Price (TZS) *</label>
+            <input type="number" id="priceInput" class="field-input" placeholder="35000" min="1000" required />
           </div>
+
           <div>
-            <label class="field-label">Host Phone *</label>
+            <label class="field-label" for="phoneInput">Host Phone *</label>
             <input type="tel" id="phoneInput" class="field-input" placeholder="+2557..." required />
           </div>
+
           <div>
-            <label class="field-label">Latitude Pin *</label>
+            <label class="field-label" for="latInput">Latitude Pin *</label>
             <input type="text" id="latInput" class="field-input" placeholder="-5.0689" required />
           </div>
+
           <div>
-            <label class="field-label">Longitude Pin *</label>
+            <label class="field-label" for="lngInput">Longitude Pin *</label>
             <input type="text" id="lngInput" class="field-input" placeholder="39.0982" required />
           </div>
+
           <div class="full">
-            <label class="field-label">Amenities (comma-separated)</label>
+            <button type="button" id="useMyLocationBtn" class="secondary-action-btn">
+              📍 Use My Current GPS Location
+            </button>
+          </div>
+
+          <div class="full">
+            <label class="field-label" for="photoInput">Room Photo (optional)</label>
+            <input type="file" id="photoInput" class="field-input" accept="image/*" />
+            <div id="photoPreviewWrap" class="photo-preview-wrap hidden">
+              <img id="photoPreviewImg" class="photo-preview-img" alt="Selected room preview" />
+              <button type="button" id="clearPhotoBtn" class="clear-photo-btn">Remove Photo</button>
+            </div>
+          </div>
+
+          <div class="full">
+            <label class="field-label" for="amenitiesInput">Amenities (comma-separated)</label>
             <input type="text" id="amenitiesInput" class="field-input" value="En-suite bathroom, Fan, Parking" />
           </div>
+
           <div class="full">
             <button type="submit" id="publishRoomBtn" class="submit-room-btn">+ Publish Room to Rooma</button>
           </div>
         </form>
-        <p id="hostFeedback" style="margin-top: 10px; font-size: 0.85rem; color: #0284c7; font-weight: 600;"></p>
+        <p id="hostFeedback" class="host-feedback"></p>
       </div>
 
-      <h3 style="margin: 14px 4px 10px;">Your Uploaded Rooms</h3>
+      <h3 class="section-heading">Your Uploaded Rooms</h3>
       <div id="myRoomsList" class="rooms-grid"></div>
     </div>
   </div>
 
-  <!-- ==================== 3. FIREBASE AUTH + REALTIME DB ==================== -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
-    import {
-      getAuth,
-      createUserWithEmailAndPassword,
-      signInWithEmailAndPassword,
-      updateProfile,
-      onAuthStateChanged,
-      signOut
-    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
-    import {
-      getDatabase,
-      ref,
-      push,
-      set,
-      get,
-      update,
-      onValue,
-      off
-    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyA5GrPyPrxfEruGGlEOx02jF5fOAJIidWY",
-      authDomain: "rooma-tz.firebaseapp.com",
-      databaseURL: "https://rooma-tz-default-rtdb.firebaseio.com",
-      projectId: "rooma-tz",
-      storageBucket: "rooma-tz.firebasestorage.app",
-      messagingSenderId: "868313040311",
-      appId: "1:868313040311:web:383a9a5e4973b730ded432",
-      measurementId: "G-HF34SR1734"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const db = getDatabase(app);
-
-    // DOM Elements
-    const authView = document.getElementById("authView");
-    const appView = document.getElementById("appView");
-    const tabLoginBtn = document.getElementById("tabLoginBtn");
-    const tabRegisterBtn = document.getElementById("tabRegisterBtn");
-    const loginForm = document.getElementById("loginForm");
-    const registerForm = document.getElementById("registerForm");
-    const goToRegisterLink = document.getElementById("goToRegisterLink");
-    const goToLoginLink = document.getElementById("goToLoginLink");
-    const authStatus = document.getElementById("authStatus");
-
-    const welcomeUserText = document.getElementById("welcomeUserText");
-    const guestModeTab = document.getElementById("guestModeTab");
-    const hostModeTab = document.getElementById("hostModeTab");
-    const logoutBtn = document.getElementById("logoutBtn");
-    const guestSection = document.getElementById("guestSection");
-    const hostSection = document.getElementById("hostSection");
-
-    const searchInput = document.getElementById("searchInput");
-    const filterAvailBtn = document.getElementById("filterAvailBtn");
-    const filterBudgetBtn = document.getElementById("filterBudgetBtn");
-    const roomsList = document.getElementById("roomsList");
-    const myRoomsList = document.getElementById("myRoomsList");
-    const addRoomForm = document.getElementById("addRoomForm");
-    const hostFeedback = document.getElementById("hostFeedback");
-
-    let currentUser = null;
-    let allRooms = [];
-    let onlyAvailable = true;
-    let budgetCap = null;
-    let roomsRef = null;
-
-    function showAuthMessage(msg) {
-      authStatus.textContent = msg;
-      authStatus.classList.remove("hidden");
-    }
-
-    function clearAuthMessage() {
-      authStatus.classList.add("hidden");
-    }
-
-    function switchToLogin() {
-      tabLoginBtn.classList.add("active");
-      tabRegisterBtn.classList.remove("active");
-      loginForm.classList.remove("hidden");
-      registerForm.classList.add("hidden");
-      clearAuthMessage();
-    }
-
-    function switchToRegister() {
-      tabRegisterBtn.classList.add("active");
-      tabLoginBtn.classList.remove("active");
-      registerForm.classList.remove("hidden");
-      loginForm.classList.add("hidden");
-      clearAuthMessage();
-    }
-
-    tabLoginBtn.addEventListener("click", switchToLogin);
-    tabRegisterBtn.addEventListener("click", switchToRegister);
-    goToRegisterLink.addEventListener("click", switchToRegister);
-    goToLoginLink.addEventListener("click", switchToLogin);
-
-    // Register User
-    registerForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      clearAuthMessage();
-
-      const fullName = document.getElementById("regName").value.trim();
-      const email = document.getElementById("regEmail").value.trim();
-      const password = document.getElementById("regPassword").value;
-      const role = document.getElementById("regRole").value;
-      const btn = document.getElementById("registerSubmitBtn");
-
-      try {
-        btn.disabled = true;
-        btn.textContent = "Creating account...";
-        const cred = await createUserWithEmailAndPassword(auth, email, password);
-        await updateProfile(cred.user, { displayName: fullName });
-        await set(ref(db, `users/${cred.user.uid}`), {
-          fullName,
-          email,
-          role,
-          createdAt: Date.now()
-        });
-      } catch (err) {
-        showAuthMessage(err.message);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Register";
-      }
-    });
-
-    // Login User
-    loginForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      clearAuthMessage();
-
-      const email = document.getElementById("loginEmail").value.trim();
-      const password = document.getElementById("loginPassword").value;
-      const btn = document.getElementById("loginSubmitBtn");
-
-      try {
-        btn.disabled = true;
-        btn.textContent = "Logging in...";
-        await signInWithEmailAndPassword(auth, email, password);
-      } catch (err) {
-        showAuthMessage(err.message);
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "Login";
-      }
-    });
-
-    // Logout
-    logoutBtn.addEventListener("click", async () => {
-      await signOut(auth);
-    });
-
-    // Mode Switching
-    guestModeTab.addEventListener("click", () => {
-      guestModeTab.classList.add("active");
-      hostModeTab.classList.remove("active");
-      guestSection.classList.remove("hidden");
-      hostSection.classList.add("hidden");
-    });
-
-    hostModeTab.addEventListener("click", () => {
-      hostModeTab.classList.add("active");
-      guestModeTab.classList.remove("active");
-      hostSection.classList.remove("hidden");
-      guestSection.classList.add("hidden");
-    });
-
-    // Filters
-    searchInput.addEventListener("input", renderRooms);
-    filterAvailBtn.addEventListener("click", () => {
-      onlyAvailable = !onlyAvailable;
-      filterAvailBtn.classList.toggle("active", onlyAvailable);
-      filterAvailBtn.textContent = onlyAvailable ? "✓ Available Now" : "All Statuses";
-      renderRooms();
-    });
-
-    filterBudgetBtn.addEventListener("click", () => {
-      budgetCap = budgetCap === 35000 ? null : 35000;
-      filterBudgetBtn.classList.toggle("active", budgetCap === 35000);
-      renderRooms();
-    });
-
-    // Publish Room to Realtime Database
-    addRoomForm.addEventListener("submit", async (e) => {
-      e.preventDefault();
-      if (!currentUser) return;
-
-      const btn = document.getElementById("publishRoomBtn");
-      try {
-        btn.disabled = true;
-        btn.textContent = "Publishing...";
-
-        const amenitiesRaw = document.getElementById("amenitiesInput").value;
-        const amenities = amenitiesRaw
-          .split(",")
-          .map((s) => s.trim())
-          .filter(Boolean);
-
-        const newRoomRef = push(ref(db, "rooms"));
-        await set(newRoomRef, {
-          hostId: currentUser.uid,
-          hostName: currentUser.displayName || currentUser.email,
-          guesthouseName: document.getElementById("ghNameInput").value.trim(),
-          roomTitle: document.getElementById("roomTitleInput").value.trim(),
-          city: document.getElementById("cityInput").value.trim(),
-          area: document.getElementById("areaInput").value.trim(),
-          landmark: document.getElementById("landmarkInput").value.trim() || "Near main road",
-          nightlyPrice: Number(document.getElementById("priceInput").value),
-          hostPhone: document.getElementById("phoneInput").value.trim(),
-          latitude: parseFloat(document.getElementById("latInput").value),
-          longitude: parseFloat(document.getElementById("lngInput").value),
-          amenities: amenities.length ? amenities : ["Standard room"],
-          availability: "available_now",
-          createdAt: Date.now()
-        });
-
-        addRoomForm.reset();
-        document.getElementById("amenitiesInput").value = "En-suite bathroom, Fan, Parking";
-        hostFeedback.textContent = "Room published live to Rooma!";
-      } catch (err) {
-        hostFeedback.textContent = "Error: " + err.message;
-      } finally {
-        btn.disabled = false;
-        btn.textContent = "+ Publish Room to Rooma";
-      }
-    });
-
-    // Toggle Availability in Realtime Database
-    window.toggleRoomStatus = async (roomId, currentStatus) => {
-      const nextStatus = currentStatus === "available_now" ? "occupied" : "available_now";
-      await update(ref(db, `rooms/${roomId}`), { availability: nextStatus });
-    };
-
-    function renderRooms() {
-      const q = searchInput.value.trim().toLowerCase();
-
-      const filtered = allRooms.filter((r) => {
-        const matchText =
-          !q ||
-          (r.city || "").toLowerCase().includes(q) ||
-          (r.area || "").toLowerCase().includes(q) ||
-          (r.guesthouseName || "").toLowerCase().includes(q) ||
-          (r.landmark || "").toLowerCase().includes(q);
-        const matchAvail = !onlyAvailable || r.availability === "available_now";
-        const matchPrice = budgetCap === null || Number(r.nightlyPrice) <= budgetCap;
-        return matchText && matchAvail && matchPrice;
-      });
-
-      if (filtered.length === 0) {
-        roomsList.innerHTML = `<div class="panel" style="grid-column:1/-1;text-align:center;color:#64748b;">No matching rooms yet. Switch to <b>Host Panel</b> to upload one!</div>`;
-      } else {
-        roomsList.innerHTML = filtered
-          .map((r) => {
-            const isAvail = r.availability === "available_now";
-            const mapLink = `https://www.google.com/maps?q=${r.latitude},${r.longitude}`;
-            return `
-              <div class="room-card">
-                <div>
-                  <div class="room-top">
-                    <div>
-                      <div class="gh-name">${r.guesthouseName}</div>
-                      <div class="room-title">${r.roomTitle}</div>
-                    </div>
-                    <span class="badge ${isAvail ? "avail" : "occ"}">
-                      ${isAvail ? "Available Now" : "Occupied"}
-                    </span>
-                  </div>
-                  <p class="meta-line" style="margin-top:8px;">📍 ${r.area}, ${r.city} • ${r.landmark}</p>
-                  <p class="sub-meta" style="margin-top:4px;">${(r.amenities || []).join(" • ")}</p>
-                  <p class="sub-meta" style="margin-top:4px;">
-                    <a href="${mapLink}" target="_blank" style="color:#0284c7;font-weight:600;">Open Map Pin (${r.latitude}, ${r.longitude})</a>
-                  </p>
-                </div>
-                <div class="room-bottom">
-                  <div class="price">${Number(r.nightlyPrice).toLocaleString()} TZS <span>/ night</span></div>
-                  <a class="btn-small" href="tel:${r.hostPhone}">Call Host</a>
-                </div>
-              </div>
-            `;
-          })
-          .join("");
-      }
-
-      const mine = allRooms.filter((r) => currentUser && r.hostId === currentUser.uid);
-      if (mine.length === 0) {
-        myRoomsList.innerHTML = `<div class="panel" style="grid-column:1/-1;text-align:center;color:#64748b;">You haven't uploaded any rooms yet.</div>`;
-      } else {
-        myRoomsList.innerHTML = mine
-          .map((r) => {
-            const isAvail = r.availability === "available_now";
-            return `
-              <div class="room-card">
-                <div>
-                  <div class="room-top">
-                    <div>
-                      <div class="gh-name">${r.guesthouseName}</div>
-                      <div class="room-title">${r.roomTitle}</div>
-                    </div>
-                    <span class="badge ${isAvail ? "avail" : "occ"}">
-                      ${isAvail ? "Available Now" : "Occupied"}
-                    </span>
-                  </div>
-                  <p class="meta-line" style="margin-top:6px;">${r.area}, ${r.city} • ${Number(r.nightlyPrice).toLocaleString()} TZS/night</p>
-                </div>
-                <button
-                  type="button"
-                  class="btn-small"
-                  style="width:100%;background:${isAvail ? "#ef4444" : "#16a34a"};"
-                  onclick="toggleRoomStatus('${r.id}', '${r.availability}')"
-                >
-                  ${isAvail ? "Mark as Occupied" : "Mark as Available Now"}
-                </button>
-              </div>
-            `;
-          })
-          .join("");
-      }
-    }
-
-    // Auth Listener & Real-time Rooms Sync
-    onAuthStateChanged(auth, async (user) => {
-      currentUser = user;
-      if (user) {
-        authView.classList.add("hidden");
-        appView.classList.remove("hidden");
-        welcomeUserText.textContent = `Welcome, ${user.displayName || user.email}`;
-
-        try {
-          const snap = await get(ref(db, `users/${user.uid}`));
-          if (snap.exists() && snap.val().role === "host") {
-            hostModeTab.click();
-          }
-        } catch (_) {}
-
-        roomsRef = ref(db, "rooms");
-        onValue(roomsRef, (snapshot) => {
-          const val = snapshot.val();
-          allRooms = val
-            ? Object.entries(val).map(([id, data]) => ({ id, ...data }))
-            : [];
-          allRooms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-          renderRooms();
-        });
-      } else {
-        if (roomsRef) off(roomsRef);
-        appView.classList.add("hidden");
-        authView.classList.remove("hidden");
-      }
-    });
-  </script>
+  <!-- ==================== 3. MODULAR SCRIPTS ==================== -->
+  <script type="module" src="auth.js"></script>
+  <script type="module" src="rooms.js"></script>
 </body>
 </html>
