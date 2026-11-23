@@ -32,6 +32,8 @@ const welcomeUserText = document.getElementById("welcomeUserText");
 const guestModeTab = document.getElementById("guestModeTab");
 const logoutBtn = document.getElementById("logoutBtn");
 
+let pendingRegisteredProfile = null;
+
 function normalizePhone(rawPhone) {
   const digits = (rawPhone || "").replace(/[^\d+]/g, "").trim();
   if (/^\+255[67]\d{8}$/.test(digits)) return digits;
@@ -115,7 +117,7 @@ forgotEmailLink.addEventListener("click", () => {
   );
 });
 
-// Register User (Email/Password + Valid Phone)
+// Register User (Email/Password + Valid Phone + Selected Role)
 registerForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   clearAuthMessage();
@@ -124,7 +126,7 @@ registerForm.addEventListener("submit", async (e) => {
   const cleanPhone = normalizePhone(document.getElementById("regPhone").value);
   const email = document.getElementById("regEmail").value.trim();
   const password = document.getElementById("regPassword").value;
-  const role = document.getElementById("regRole").value;
+  const selectedRole = document.getElementById("regRole").value === "host" ? "host" : "guest";
   const btn = document.getElementById("registerSubmitBtn");
 
   if (!cleanPhone) {
@@ -137,14 +139,20 @@ registerForm.addEventListener("submit", async (e) => {
     btn.textContent = "Creating account...";
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     await updateProfile(cred.user, { displayName: fullName });
-    await set(ref(db, `users/${cred.user.uid}`), {
+
+    const newProfile = {
       fullName,
       phone: cleanPhone,
       email,
-      role,
+      role: selectedRole,
       createdAt: Date.now()
-    });
+    };
+
+    pendingRegisteredProfile = newProfile;
+    await set(ref(db, `users/${cred.user.uid}`), newProfile);
+    await window.refreshRoomaProfile(newProfile);
   } catch (err) {
+    pendingRegisteredProfile = null;
     showAuthMessage(err);
   } finally {
     btn.disabled = false;
@@ -175,6 +183,7 @@ loginForm.addEventListener("submit", async (e) => {
 
 // Logout
 logoutBtn.addEventListener("click", async () => {
+  pendingRegisteredProfile = null;
   await signOut(auth);
 });
 
@@ -183,23 +192,29 @@ window.refreshRoomaProfile = async (overrideProfile = null) => {
   const user = auth.currentUser;
   if (!user) return null;
 
-  let profile = overrideProfile;
+  let profile = overrideProfile || pendingRegisteredProfile;
   if (!profile) {
     try {
       const snap = await get(ref(db, `users/${user.uid}`));
       if (snap.exists()) profile = snap.val();
     } catch (_) {
-      // Fallback to auth displayName/email
+      // Fallback to existing profile or auth details
     }
   }
 
-  window.roomaUserProfile = profile || {
-    fullName: user.displayName || user.email || "Member",
-    phone: "",
-    email: user.email || "",
-    role: "guest"
+  const existingRole = window.roomaUserProfile?.role;
+  const resolvedRole = profile?.role === "host" || existingRole === "host" ? "host" : profile?.role || existingRole || "guest";
+
+  window.roomaUserProfile = {
+    fullName: profile?.fullName || window.roomaUserProfile?.fullName || user.displayName || user.email || "Member",
+    phone: profile?.phone || window.roomaUserProfile?.phone || "",
+    email: profile?.email || window.roomaUserProfile?.email || user.email || "",
+    role: resolvedRole,
+    createdAt: profile?.createdAt || window.roomaUserProfile?.createdAt || Date.now(),
+    updatedAt: profile?.updatedAt || window.roomaUserProfile?.updatedAt || null
   };
 
+  pendingRegisteredProfile = null;
   welcomeUserText.textContent = `Welcome, ${window.roomaUserProfile.fullName || user.displayName || user.email}`;
   if (typeof window.onRoomaProfileUpdated === "function") {
     window.onRoomaProfileUpdated(window.roomaUserProfile);
@@ -212,9 +227,10 @@ onAuthStateChanged(auth, async (user) => {
   if (user) {
     authView.classList.add("hidden");
     appView.classList.remove("hidden");
-    await window.refreshRoomaProfile();
+    await window.refreshRoomaProfile(pendingRegisteredProfile);
     guestModeTab.click();
   } else {
+    pendingRegisteredProfile = null;
     window.roomaUserProfile = null;
     appView.classList.add("hidden");
     authView.classList.remove("hidden");
