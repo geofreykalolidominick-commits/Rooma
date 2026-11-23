@@ -8,7 +8,7 @@
 </head>
 <body>
 
-  <!-- ==================== 1. AUTH & QUICK GUEST ONBOARDING ==================== -->
+  <!-- ==================== 1. AUTH SCREEN (LOGIN & REGISTER) ==================== -->
   <div id="authView" class="auth-wrapper">
     <div class="brand-banner">
       <h1>Rooma</h1>
@@ -23,47 +23,12 @@
       </div>
 
       <div class="pill-switch">
-        <button type="button" id="tabGuestQuickBtn" class="pill-btn active">Quick Guest</button>
-        <button type="button" id="tabLoginBtn" class="pill-btn">Login</button>
+        <button type="button" id="tabLoginBtn" class="pill-btn active">Login</button>
         <button type="button" id="tabRegisterBtn" class="pill-btn">Register</button>
       </div>
 
-      <!-- ONE-TIME GUEST QUICK START (NAME + VALID PHONE -> STRAIGHT TO FIND ROOMS) -->
-      <form id="guestQuickForm">
-        <div class="input-group">
-          <span class="input-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-            </svg>
-          </span>
-          <input type="text" id="quickGuestName" class="auth-input" placeholder="Your Full Name" required />
-        </div>
-
-        <div class="input-group">
-          <span class="input-icon">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M6.62 10.79a15.053 15.053 0 006.59 6.59l2.2-2.2c.27-.27.67-.36 1.02-.24 1.12.37 2.33.57 3.57.57.55 0 1 .45 1 1V20c0 .55-.45 1-1 1-9.39 0-17-7.61-17-17 0-.55.45-1 1-1h3.5c.55 0 1 .45 1 1 0 1.25.2 2.45.57 3.57.11.35.03.74-.25 1.02l-2.2 2.2z"/>
-            </svg>
-          </span>
-          <input
-            type="tel"
-            id="quickGuestPhone"
-            class="auth-input"
-            placeholder="Phone (e.g., +255712345678 or 0712345678)"
-            required
-          />
-        </div>
-
-        <button type="submit" id="quickGuestSubmitBtn" class="primary-auth-btn">Find Rooms Now</button>
-
-        <div class="divider-or"><span>or</span></div>
-        <p class="switch-text">
-          Host or Admin? <a id="goToLoginLink">Sign in with Email</a>
-        </p>
-      </form>
-
       <!-- EMAIL LOGIN FORM -->
-      <form id="loginForm" class="hidden">
+      <form id="loginForm">
         <div class="input-group">
           <span class="input-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -82,11 +47,16 @@
           <input type="password" id="loginPassword" class="auth-input" placeholder="Password" required />
         </div>
 
+        <div class="recovery-row">
+          <a id="forgotPasswordLink" class="recovery-link">Forgot Password?</a>
+          <a id="forgotEmailLink" class="recovery-link">Forgot Email?</a>
+        </div>
+
         <button type="submit" id="loginSubmitBtn" class="primary-auth-btn">Login</button>
 
         <div class="divider-or"><span>or</span></div>
         <p class="switch-text">
-          Need an account? <a id="goToRegisterLink">Register</a>
+          Don't have an account? <a id="goToRegisterLink">Register</a>
         </p>
       </form>
 
@@ -150,7 +120,7 @@
 
         <div class="divider-or"><span>or</span></div>
         <p class="switch-text">
-          Already have an account? <a id="goToLoginFromRegLink">Login</a>
+          Already have an account? <a id="goToLoginLink">Login</a>
         </p>
       </form>
 
@@ -217,15 +187,18 @@
           <button type="submit" id="confirmBookingBtn" class="submit-room-btn">Request Booking</button>
         </form>
 
-        <!-- WAITING FOR HOST APPROVAL STATE -->
+        <!-- WAITING FOR HOST APPROVAL STATE (INCLUDES CALL HOST BUTTON) -->
         <div id="bookingPendingBox" class="pending-box hidden">
           <div class="pending-banner">
             <h4>Waiting for Host Approval...</h4>
             <p id="bookingPendingRefText">Reference: #RM-0000</p>
             <p class="sub-meta" style="margin-top: 4px;">
-              Directions and host call unlock as soon as the host approves your booking.
+              Directions unlock once approved, and you can call the host right away below.
             </p>
           </div>
+          <a id="callHostPendingBtn" class="action-btn call-btn" style="margin-top: 10px;">
+            📞 Call Host
+          </a>
         </div>
 
         <!-- POST-APPROVAL ACTIONS (DIRECTIONS & CALL HOST) -->
@@ -349,6 +322,45 @@
       <div id="myRoomsList" class="rooms-grid"></div>
     </div>
 
+    <!-- ACTIVITY VIEW (BOOKINGS, HOSTINGS & ACCOUNT ACTIVITY) -->
+    <div id="activitySection" class="hidden">
+      <div class="panel">
+        <h3 class="section-title">Your Rooma Activity</h3>
+        <p class="sub-meta">All bookings, listings, and account updates recorded for your account.</p>
+      </div>
+      <div id="activityFeedList" class="rooms-grid"></div>
+    </div>
+
+    <!-- ACCOUNT VIEW (PROFILE VIEW & EDIT) -->
+    <div id="accountSection" class="hidden">
+      <div class="panel">
+        <h3 class="section-title">My Account</h3>
+        <p id="accountMetaText" class="sub-meta" style="margin-bottom: 14px;"></p>
+
+        <form id="accountProfileForm" class="form-grid">
+          <div class="full">
+            <label class="field-label" for="accountNameInput">Full Name *</label>
+            <input type="text" id="accountNameInput" class="field-input" required />
+          </div>
+
+          <div class="full">
+            <label class="field-label" for="accountPhoneInput">Phone Number *</label>
+            <input type="tel" id="accountPhoneInput" class="field-input" placeholder="+255712345678 or 0712345678" required />
+          </div>
+
+          <div class="full">
+            <label class="field-label" for="accountEmailDisplay">Email Address</label>
+            <input type="email" id="accountEmailDisplay" class="field-input" disabled />
+          </div>
+
+          <div class="full">
+            <button type="submit" id="saveAccountBtn" class="submit-room-btn">Save Account Changes</button>
+          </div>
+        </form>
+        <p id="accountFeedback" class="host-feedback"></p>
+      </div>
+    </div>
+
     <!-- ADMIN APPROVAL & BOOKINGS MONITOR VIEW -->
     <div id="adminSection" class="hidden">
       <div class="panel">
@@ -365,6 +377,30 @@
       <h3 class="section-heading">Recent Guest Bookings</h3>
       <div id="adminBookingsList" class="rooms-grid"></div>
     </div>
+
+    <!-- BOTTOM NAVIGATION BAR (HOME | ACTIVITY | ACCOUNT) -->
+    <nav id="bottomNavBar" class="bottom-nav" aria-label="Primary Bottom Navigation">
+      <button type="button" id="bottomHomeBtn" class="bottom-nav-btn active">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
+        </svg>
+        <span>Home</span>
+      </button>
+
+      <button type="button" id="bottomActivityBtn" class="bottom-nav-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M19 3H5c-1.1 0-2 .9-2 2v14l4-4h12c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 8H7V9h10v2zm-4 4H7v-2h6v2zm4-8H7V5h10v2z"/>
+        </svg>
+        <span>Activity</span>
+      </button>
+
+      <button type="button" id="bottomAccountBtn" class="bottom-nav-btn">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+        </svg>
+        <span>Account</span>
+      </button>
+    </nav>
   </div>
 
   <!-- ==================== 3. MODULAR SCRIPTS ==================== -->
