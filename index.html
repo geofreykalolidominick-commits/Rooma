@@ -171,9 +171,20 @@
 
         <form id="confirmBookingForm" class="booking-form">
           <div class="form-grid">
+            <div>
+              <label class="field-label" for="bookingCheckInInput">Check-In Date *</label>
+              <input type="date" id="bookingCheckInInput" class="field-input" required />
+            </div>
+
+            <div>
+              <label class="field-label" for="bookingCheckOutInput">Check-Out Date *</label>
+              <input type="date" id="bookingCheckOutInput" class="field-input" required />
+            </div>
+
             <div class="full">
-              <label class="field-label" for="bookingNightsInput">Number of Nights *</label>
-              <input type="number" id="bookingNightsInput" class="field-input" value="1" min="1" max="30" required />
+              <p id="bookingStaySummaryText" class="sub-meta" style="margin-top: 2px;">
+                Duration: <strong>1 night</strong>
+              </p>
             </div>
           </div>
 
@@ -192,6 +203,7 @@
           <div class="pending-banner">
             <h4>Waiting for Host Approval...</h4>
             <p id="bookingPendingRefText">Reference: #RM-0000</p>
+            <p id="bookingPendingMetaText" class="sub-meta" style="margin-top: 4px;"></p>
             <p class="sub-meta" style="margin-top: 4px;">
               Directions unlock once approved, and you can call the host right away below.
             </p>
@@ -206,6 +218,7 @@
           <div class="confirmed-banner">
             <h4>Booking Approved &amp; Confirmed!</h4>
             <p id="bookingRefText">Reference: #RM-0000</p>
+            <p id="bookingConfirmedMetaText" class="sub-meta" style="margin-top: 4px;"></p>
           </div>
           <div class="confirmed-actions">
             <a id="openDirectionsBtn" class="action-btn directions-btn" target="_blank" rel="noopener">
