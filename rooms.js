@@ -119,6 +119,12 @@ function syncAdminTabVisibility() {
   }
 }
 
+function resolveUserRole(profileRole, fallbackRole) {
+  if (profileRole === "host" || fallbackRole === "host") return "host";
+  if (profileRole === "guest" || fallbackRole === "guest") return "guest";
+  return "guest";
+}
+
 function normalizePhone(rawPhone) {
   const digits = (rawPhone || "").replace(/[^\d+]/g, "").trim();
   if (/^\+255[67]\d{8}$/.test(digits)) return digits;
@@ -231,10 +237,11 @@ bottomAccountBtn.addEventListener("click", () => showSection("account"));
 function populateAccountForm() {
   if (!currentUser) return;
   const profile = window.roomaUserProfile || {};
+  const effectiveRole = resolveUserRole(profile.role, null);
   accountNameInput.value = profile.fullName || currentUser.displayName || "";
   accountPhoneInput.value = profile.phone || "";
   accountEmailDisplay.value = currentUser.email || profile.email || "";
-  const roleLabel = isAdmin ? "Admin" : (profile.role || "guest").toUpperCase();
+  const roleLabel = isAdmin ? "ADMIN" : effectiveRole.toUpperCase();
   const updatedText = profile.updatedAt
     ? ` • Last updated ${formatBookedWhen(profile.updatedAt)}`
     : "";
@@ -266,12 +273,13 @@ accountProfileForm.addEventListener("submit", async (e) => {
   try {
     saveAccountBtn.disabled = true;
     saveAccountBtn.textContent = "Saving...";
+    const preservedRole = resolveUserRole(window.roomaUserProfile?.role, null);
     const nextProfile = {
       ...(window.roomaUserProfile || {}),
       fullName,
       phone: cleanPhone,
       email: currentUser.email || window.roomaUserProfile?.email || "",
-      role: window.roomaUserProfile?.role || "guest",
+      role: preservedRole,
       updatedAt: Date.now()
     };
 
