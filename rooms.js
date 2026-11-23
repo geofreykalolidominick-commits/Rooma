@@ -30,20 +30,23 @@ const filterNearMeBtn = document.getElementById("filterNearMeBtn");
 const distanceStatus = document.getElementById("distanceStatus");
 const roomsList = document.getElementById("roomsList");
 
-// Booking Summary & Confirmation Elements
+// Booking Summary & Approval / Confirmation Elements
 const backToRoomsBtn = document.getElementById("backToRoomsBtn");
 const bookingRoomSummary = document.getElementById("bookingRoomSummary");
 const confirmBookingForm = document.getElementById("confirmBookingForm");
 const bookingNightsInput = document.getElementById("bookingNightsInput");
-const bookingPhoneInput = document.getElementById("bookingPhoneInput");
+const savedGuestPhoneNote = document.getElementById("savedGuestPhoneNote");
 const bookingTotalText = document.getElementById("bookingTotalText");
 const confirmBookingBtn = document.getElementById("confirmBookingBtn");
+const bookingPendingBox = document.getElementById("bookingPendingBox");
+const bookingPendingRefText = document.getElementById("bookingPendingRefText");
 const bookingConfirmedBox = document.getElementById("bookingConfirmedBox");
 const bookingRefText = document.getElementById("bookingRefText");
 const openDirectionsBtn = document.getElementById("openDirectionsBtn");
 const callHostConfirmedBtn = document.getElementById("callHostConfirmedBtn");
 
-// Host Upload Elements
+// Host Upload & Bookings Elements
+const hostBookingsList = document.getElementById("hostBookingsList");
 const myRoomsList = document.getElementById("myRoomsList");
 const addRoomForm = document.getElementById("addRoomForm");
 const useMyLocationBtn = document.getElementById("useMyLocationBtn");
@@ -64,6 +67,7 @@ let isAdmin = false;
 let allRooms = [];
 let allBookings = [];
 let activeBookingRoom = null;
+let activeBookingId = null;
 
 let onlyAvailable = true;
 let budgetCap = null;
@@ -325,6 +329,14 @@ window.deleteHostRoom = async (roomId, encodedTitle) => {
   }
 };
 
+// Host / Admin: Approve or Decline a Booking
+window.setBookingStatus = async (bookingId, nextStatus) => {
+  await update(ref(db, `bookings/${bookingId}`), {
+    status: nextStatus,
+    updatedAt: Date.now()
+  });
+};
+
 // Admin: Approve Room
 window.approveRoom = async (roomId) => {
   if (!isAdmin) return;
@@ -361,6 +373,39 @@ function updateBookingTotal() {
   bookingTotalText.textContent = `${total.toLocaleString()} TZS`;
 }
 
+function syncGuestBookingStatusUI() {
+  if (!activeBookingRoom || !activeBookingId) return;
+  const booking = allBookings.find((b) => b.id === activeBookingId);
+  if (!booking) return;
+
+  const shortCode = `RM-${booking.id.slice(-4).toUpperCase()}`;
+
+  if (booking.status === "approved") {
+    confirmBookingForm.classList.add("hidden");
+    bookingPendingBox.classList.add("hidden");
+    bookingConfirmedBox.classList.remove("hidden");
+
+    bookingRefText.textContent = `Reference: #${shortCode} • ${booking.nights} night(s) • ${Number(booking.totalTzs || 0).toLocaleString()} TZS`;
+    const dest = `${activeBookingRoom.latitude},${activeBookingRoom.longitude}`;
+    openDirectionsBtn.href = userCoords
+      ? `https://www.google.com/maps/dir/?api=1&origin=${userCoords.lat},${userCoords.lng}&destination=${dest}&travelmode=driving`
+      : `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
+    callHostConfirmedBtn.href = `tel:${activeBookingRoom.hostPhone}`;
+  } else if (booking.status === "declined") {
+    confirmBookingForm.classList.remove("hidden");
+    bookingPendingBox.classList.add("hidden");
+    bookingConfirmedBox.classList.add("hidden");
+    confirmBookingBtn.disabled = false;
+    confirmBookingBtn.textContent = "Request Booking Again";
+    savedGuestPhoneNote.textContent = "Rooma: Previous request was declined by the host. You can send another request.";
+  } else {
+    confirmBookingForm.classList.add("hidden");
+    bookingConfirmedBox.classList.add("hidden");
+    bookingPendingBox.classList.remove("hidden");
+    bookingPendingRefText.textContent = `Reference: #${shortCode} • ${booking.nights} night(s) • ${Number(booking.totalTzs || 0).toLocaleString()} TZS`;
+  }
+}
+
 bookingNightsInput.addEventListener("input", updateBookingTotal);
 
 window.openBookingPage = (roomId) => {
@@ -368,14 +413,20 @@ window.openBookingPage = (roomId) => {
   if (!room) return;
 
   activeBookingRoom = room;
+  activeBookingId = null;
   bookingNightsInput.value = "1";
-  bookingPhoneInput.value = "";
   updateBookingTotal();
 
+  const savedPhone = window.roomaUserProfile?.phone || "";
+  savedGuestPhoneNote.textContent = savedPhone
+    ? `Your saved contact (${savedPhone}) will be shared with the host upon approval.`
+    : "Your account contact will be shared with the host upon approval.";
+
   confirmBookingForm.classList.remove("hidden");
+  bookingPendingBox.classList.add("hidden");
   bookingConfirmedBox.classList.add("hidden");
   confirmBookingBtn.disabled = false;
-  confirmBookingBtn.textContent = "✓ Confirm Booking";
+  confirmBookingBtn.textContent = "Request Booking";
 
   const distKm = userCoords
     ? calculateDistanceKm(userCoords.lat, userCoords.lng, Number(room.latitude), Number(room.longitude))
@@ -397,21 +448,37 @@ window.openBookingPage = (roomId) => {
     </div>
   `;
 
+  // If the current guest already has a pending/approved booking for this room, show its live status
+  const existing = currentUser
+    ? allBookings.find(
+        (b) =>
+          b.roomId === room.id &&
+          b.guestId === currentUser.uid &&
+          (b.status === "pending_host" || b.status === "approved")
+      )
+    : null;
+
   showSection("booking");
+
+  if (existing) {
+    activeBookingId = existing.id;
+    syncGuestBookingStatusUI();
+  }
 };
 
-// Guest: Confirm Booking -> Reveal Directions & Call Host
+// Guest: Request Booking -> Saves as "pending_host" until Host approves
 confirmBookingForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!currentUser || !activeBookingRoom) return;
 
   const nights = Math.max(1, parseInt(bookingNightsInput.value, 10) || 1);
-  const guestPhone = bookingPhoneInput.value.trim();
+  const guestName = window.roomaUserProfile?.fullName || currentUser.displayName || currentUser.email || "Guest";
+  const guestPhone = window.roomaUserProfile?.phone || "Not provided";
   const totalTzs = nights * Number(activeBookingRoom.nightlyPrice || 0);
 
   try {
     confirmBookingBtn.disabled = true;
-    confirmBookingBtn.textContent = "Confirming...";
+    confirmBookingBtn.textContent = "Sending Request...";
 
     const newBookingRef = push(ref(db, "bookings"));
     await set(newBookingRef, {
@@ -421,30 +488,23 @@ confirmBookingForm.addEventListener("submit", async (e) => {
       hostId: activeBookingRoom.hostId,
       hostPhone: activeBookingRoom.hostPhone,
       guestId: currentUser.uid,
-      guestName: currentUser.displayName || currentUser.email,
+      guestName,
       guestPhone,
       nights,
       totalTzs,
-      status: "confirmed",
+      status: "pending_host",
       createdAt: Date.now()
     });
 
-    const shortCode = `RM-${newBookingRef.key.slice(-4).toUpperCase()}`;
-    bookingRefText.textContent = `Reference: #${shortCode} • ${nights} night(s) • ${totalTzs.toLocaleString()} TZS`;
-
-    const dest = `${activeBookingRoom.latitude},${activeBookingRoom.longitude}`;
-    openDirectionsBtn.href = userCoords
-      ? `https://www.google.com/maps/dir/?api=1&origin=${userCoords.lat},${userCoords.lng}&destination=${dest}&travelmode=driving`
-      : `https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`;
-
-    callHostConfirmedBtn.href = `tel:${activeBookingRoom.hostPhone}`;
-
+    activeBookingId = newBookingRef.key;
     confirmBookingForm.classList.add("hidden");
-    bookingConfirmedBox.classList.remove("hidden");
+    bookingConfirmedBox.classList.add("hidden");
+    bookingPendingBox.classList.remove("hidden");
+    bookingPendingRefText.textContent = `Reference: #RM-${newBookingRef.key.slice(-4).toUpperCase()} • ${nights} night(s) • ${totalTzs.toLocaleString()} TZS`;
   } catch (err) {
-    alert("Rooma: Booking failed — " + err.message);
+    alert("Rooma: Booking request failed — " + err.message);
     confirmBookingBtn.disabled = false;
-    confirmBookingBtn.textContent = "✓ Confirm Booking";
+    confirmBookingBtn.textContent = "Request Booking";
   }
 });
 
@@ -459,6 +519,62 @@ function renderAdminActionRow(room) {
       </div>
     </div>
   `;
+}
+
+function renderHostBookings() {
+  if (!currentUser) {
+    hostBookingsList.innerHTML = "";
+    return;
+  }
+
+  const hostRoomIds = new Set(allRooms.filter((r) => r.hostId === currentUser.uid).map((r) => r.id));
+  const incoming = allBookings.filter(
+    (b) => b.hostId === currentUser.uid || hostRoomIds.has(b.roomId)
+  );
+
+  if (incoming.length === 0) {
+    hostBookingsList.innerHTML = `<div class="panel" style="grid-column:1/-1;text-align:center;color:#64748b;">No guest bookings for your rooms yet.</div>`;
+    return;
+  }
+
+  hostBookingsList.innerHTML = incoming
+    .map((b) => {
+      const status = b.status || "pending_host";
+      const badgeClass = status === "approved" ? "avail" : status === "declined" ? "occ" : "pending";
+      const badgeText =
+        status === "approved" ? "Approved" : status === "declined" ? "Declined" : "Needs Approval";
+      const smsMsg = encodeURIComponent(
+        `Rooma Booking: ${b.guestName} (${b.guestPhone}) requested ${b.roomTitle} at ${b.guesthouseName} for ${b.nights} night(s) (${Number(b.totalTzs || 0).toLocaleString()} TZS).`
+      );
+      const cleanPhone = (b.guestPhone || "").replace(/\s+/g, "");
+
+      return `
+        <div class="room-card">
+          <div>
+            <div class="room-top">
+              <div>
+                <div class="gh-name">${b.guesthouseName}</div>
+                <div class="room-title">${b.roomTitle}</div>
+              </div>
+              <span class="badge ${badgeClass}">${badgeText}</span>
+            </div>
+            <p class="meta-line" style="margin-top:6px;">Guest: <strong>${b.guestName}</strong> • ${b.guestPhone}</p>
+            <p class="sub-meta" style="margin-top:4px;">${b.nights} night(s) • <strong>${Number(b.totalTzs || 0).toLocaleString()} TZS</strong></p>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div class="admin-btn-row">
+              <button type="button" class="btn-small admin-approve-btn" onclick="setBookingStatus('${b.id}', 'approved')">Approve</button>
+              <button type="button" class="btn-small" style="flex:1;background:#dc2626;" onclick="setBookingStatus('${b.id}', 'declined')">Decline</button>
+            </div>
+            <div class="confirmed-actions">
+              <a href="sms:${cleanPhone}?body=${smsMsg}" class="action-btn sms-btn">✉️ SMS Guest</a>
+              <a href="tel:${cleanPhone}" class="action-btn call-btn">📞 Call Guest</a>
+            </div>
+          </div>
+        </div>
+      `;
+    })
+    .join("");
 }
 
 function renderRooms() {
@@ -594,6 +710,8 @@ function renderRooms() {
       .join("");
   }
 
+  renderHostBookings();
+
   if (isAdmin) {
     renderAdminPanel();
   }
@@ -669,17 +787,28 @@ function renderAdminPanel() {
     adminBookingsList.innerHTML = `<div class="panel" style="grid-column:1/-1;text-align:center;color:#64748b;">No guest bookings recorded yet.</div>`;
   } else {
     adminBookingsList.innerHTML = allBookings
-      .map((b) => `
-        <div class="room-card">
-          <div>
-            <div class="gh-name">${b.guesthouseName}</div>
-            <div class="room-title">${b.roomTitle}</div>
-            <p class="meta-line" style="margin-top:6px;">Guest: ${b.guestName} (${b.guestPhone})</p>
-            <p class="sub-meta" style="margin-top:4px;">${b.nights} night(s) • <strong>${Number(b.totalTzs || 0).toLocaleString()} TZS</strong></p>
+      .map((b) => {
+        const status = b.status || "pending_host";
+        const badgeClass = status === "approved" ? "avail" : status === "declined" ? "occ" : "pending";
+        const badgeText =
+          status === "approved" ? "Approved" : status === "declined" ? "Declined" : "Pending Host";
+
+        return `
+          <div class="room-card">
+            <div>
+              <div class="room-top">
+                <div>
+                  <div class="gh-name">${b.guesthouseName}</div>
+                  <div class="room-title">${b.roomTitle}</div>
+                </div>
+                <span class="badge ${badgeClass}">${badgeText}</span>
+              </div>
+              <p class="meta-line" style="margin-top:6px;">Guest: ${b.guestName} (${b.guestPhone})</p>
+              <p class="sub-meta" style="margin-top:4px;">Host Phone: ${b.hostPhone} • ${b.nights} night(s) • <strong>${Number(b.totalTzs || 0).toLocaleString()} TZS</strong></p>
+            </div>
           </div>
-          <span class="badge avail">Confirmed</span>
-        </div>
-      `)
+        `;
+      })
       .join("");
   }
 }
@@ -703,22 +832,30 @@ onAuthStateChanged(auth, (user) => {
       renderRooms();
     });
 
-    if (isAdmin) {
-      bookingsRef = ref(db, "bookings");
-      onValue(bookingsRef, (snapshot) => {
-        const val = snapshot.val();
-        allBookings = val
-          ? Object.entries(val).map(([id, data]) => ({ id, ...data }))
-          : [];
-        allBookings.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-        renderAdminPanel();
-      });
-    }
+    bookingsRef = ref(db, "bookings");
+    onValue(bookingsRef, (snapshot) => {
+      const val = snapshot.val();
+      const rawBookings = val
+        ? Object.entries(val).map(([id, data]) => ({ id, ...data }))
+        : [];
+      rawBookings.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+
+      allBookings = isAdmin
+        ? rawBookings
+        : rawBookings.filter(
+            (b) => b.guestId === user.uid || b.hostId === user.uid
+          );
+
+      renderHostBookings();
+      if (isAdmin) renderAdminPanel();
+      syncGuestBookingStatusUI();
+    });
   } else {
     if (roomsRef) off(roomsRef);
     if (bookingsRef) off(bookingsRef);
     allRooms = [];
     allBookings = [];
     activeBookingRoom = null;
+    activeBookingId = null;
   }
 });
