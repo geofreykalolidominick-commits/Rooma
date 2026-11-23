@@ -7,10 +7,8 @@
   <style>
     :root {
       --bg-gradient: linear-gradient(135deg, #e0f2fe 0%, #f0f9ff 50%, #dbeafe 100%);
-      --card-bg: rgba(255, 255, 255, 0.94);
-      --sky-primary: #7dd3fc;
+      --card-bg: rgba(255, 255, 255, 0.95);
       --sky-deep: #0284c7;
-      --sky-soft: #e0f2fe;
       --text-dark: #0f172a;
       --text-muted: #64748b;
       --input-bg: #f1f5f9;
@@ -39,7 +37,7 @@
       display: none !important;
     }
 
-    /* ================= AUTH SCREEN (MATCHING REFERENCE) ================= */
+    /* ================= AUTH SCREEN ================= */
     .auth-wrapper {
       min-height: calc(100vh - 32px);
       display: flex;
@@ -223,11 +221,6 @@
       text-align: center;
       background: #fee2e2;
       color: #991b1b;
-    }
-
-    .auth-status.info {
-      background: #e0f2fe;
-      color: #075985;
     }
 
     /* ================= MAIN ROOMA WEB APP ================= */
@@ -489,14 +482,12 @@
     </div>
 
     <div class="auth-card">
-      <!-- Top Circular Avatar Icon -->
       <div class="avatar-badge" aria-hidden="true">
         <svg width="36" height="36" viewBox="0 0 24 24" fill="currentColor">
           <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
         </svg>
       </div>
 
-      <!-- Pill Toggle Switch -->
       <div class="pill-switch">
         <button type="button" id="tabLoginBtn" class="pill-btn active">Login</button>
         <button type="button" id="tabRegisterBtn" class="pill-btn">Register</button>
@@ -672,7 +663,7 @@
     </div>
   </div>
 
-  <!-- ==================== 3. FIREBASE LOGIC ==================== -->
+  <!-- ==================== 3. FIREBASE AUTH + REALTIME DB ==================== -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
     import {
@@ -684,38 +675,30 @@
       signOut
     } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
     import {
-      getFirestore,
-      collection,
-      addDoc,
-      doc,
-      setDoc,
-      getDoc,
-      updateDoc,
-      onSnapshot,
-      query,
-      orderBy,
-      serverTimestamp
-    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+      getDatabase,
+      ref,
+      push,
+      set,
+      get,
+      update,
+      onValue,
+      off
+    } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-database.js";
 
-    // REPLACE THESE VALUES WITH YOUR OWN FIREBASE WEB APP CONFIG
     const firebaseConfig = {
-      apiKey: "YOUR_FIREBASE_API_KEY",
-      authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-      projectId: "YOUR_PROJECT_ID",
-      storageBucket: "YOUR_PROJECT_ID.appspot.com",
-      messagingSenderId: "YOUR_SENDER_ID",
-      appId: "YOUR_APP_ID"
+      apiKey: "AIzaSyA5GrPyPrxfEruGGlEOx02jF5fOAJIidWY",
+      authDomain: "rooma-tz.firebaseapp.com",
+      databaseURL: "https://rooma-tz-default-rtdb.firebaseio.com",
+      projectId: "rooma-tz",
+      storageBucket: "rooma-tz.firebasestorage.app",
+      messagingSenderId: "868313040311",
+      appId: "1:868313040311:web:383a9a5e4973b730ded432",
+      measurementId: "G-HF34SR1734"
     };
 
-    const isConfigured = firebaseConfig.apiKey !== "YOUR_FIREBASE_API_KEY";
-    let auth = null;
-    let db = null;
-
-    if (isConfigured) {
-      const app = initializeApp(firebaseConfig);
-      auth = getAuth(app);
-      db = getFirestore(app);
-    }
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
 
     // DOM Elements
     const authView = document.getElementById("authView");
@@ -747,12 +730,11 @@
     let allRooms = [];
     let onlyAvailable = true;
     let budgetCap = null;
-    let unsubscribeRooms = null;
+    let roomsRef = null;
 
-    function showAuthMessage(msg, isInfo = false) {
+    function showAuthMessage(msg) {
       authStatus.textContent = msg;
-      authStatus.classList.remove("hidden", "info");
-      if (isInfo) authStatus.classList.add("info");
+      authStatus.classList.remove("hidden");
     }
 
     function clearAuthMessage() {
@@ -780,20 +762,10 @@
     goToRegisterLink.addEventListener("click", switchToRegister);
     goToLoginLink.addEventListener("click", switchToLogin);
 
-    if (!isConfigured) {
-      showAuthMessage(
-        "UI ready! Paste your Firebase config in index.html to enable live Login, Register & Room uploads.",
-        true
-      );
-    }
-
     // Register User
     registerForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      if (!isConfigured) {
-        showAuthMessage("Add your Firebase config first to register accounts.");
-        return;
-      }
+      clearAuthMessage();
 
       const fullName = document.getElementById("regName").value.trim();
       const email = document.getElementById("regEmail").value.trim();
@@ -806,11 +778,11 @@
         btn.textContent = "Creating account...";
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         await updateProfile(cred.user, { displayName: fullName });
-        await setDoc(doc(db, "users", cred.user.uid), {
+        await set(ref(db, `users/${cred.user.uid}`), {
           fullName,
           email,
           role,
-          createdAt: serverTimestamp()
+          createdAt: Date.now()
         });
       } catch (err) {
         showAuthMessage(err.message);
@@ -823,10 +795,7 @@
     // Login User
     loginForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      if (!isConfigured) {
-        showAuthMessage("Add your Firebase config first to log in.");
-        return;
-      }
+      clearAuthMessage();
 
       const email = document.getElementById("loginEmail").value.trim();
       const password = document.getElementById("loginPassword").value;
@@ -846,10 +815,10 @@
 
     // Logout
     logoutBtn.addEventListener("click", async () => {
-      if (auth) await signOut(auth);
+      await signOut(auth);
     });
 
-    // Mode Switching (Guest vs Host)
+    // Mode Switching
     guestModeTab.addEventListener("click", () => {
       guestModeTab.classList.add("active");
       hostModeTab.classList.remove("active");
@@ -879,10 +848,10 @@
       renderRooms();
     });
 
-    // Publish Room to Firestore
+    // Publish Room to Realtime Database
     addRoomForm.addEventListener("submit", async (e) => {
       e.preventDefault();
-      if (!currentUser || !db) return;
+      if (!currentUser) return;
 
       const btn = document.getElementById("publishRoomBtn");
       try {
@@ -895,7 +864,8 @@
           .map((s) => s.trim())
           .filter(Boolean);
 
-        await addDoc(collection(db, "rooms"), {
+        const newRoomRef = push(ref(db, "rooms"));
+        await set(newRoomRef, {
           hostId: currentUser.uid,
           hostName: currentUser.displayName || currentUser.email,
           guesthouseName: document.getElementById("ghNameInput").value.trim(),
@@ -909,7 +879,7 @@
           longitude: parseFloat(document.getElementById("lngInput").value),
           amenities: amenities.length ? amenities : ["Standard room"],
           availability: "available_now",
-          createdAt: serverTimestamp()
+          createdAt: Date.now()
         });
 
         addRoomForm.reset();
@@ -923,11 +893,10 @@
       }
     });
 
-    // Toggle Room Status in Firestore
+    // Toggle Availability in Realtime Database
     window.toggleRoomStatus = async (roomId, currentStatus) => {
-      if (!db) return;
       const nextStatus = currentStatus === "available_now" ? "occupied" : "available_now";
-      await updateDoc(doc(db, "rooms", roomId), { availability: nextStatus });
+      await update(ref(db, `rooms/${roomId}`), { availability: nextStatus });
     };
 
     function renderRooms() {
@@ -980,7 +949,6 @@
           .join("");
       }
 
-      // Render Host's own rooms
       const mine = allRooms.filter((r) => currentUser && r.hostId === currentUser.uid);
       if (mine.length === 0) {
         myRoomsList.innerHTML = `<div class="panel" style="grid-column:1/-1;text-align:center;color:#64748b;">You haven't uploaded any rooms yet.</div>`;
@@ -1017,36 +985,36 @@
       }
     }
 
-    // Listen to Auth State
-    if (isConfigured) {
-      onAuthStateChanged(auth, async (user) => {
-        currentUser = user;
-        if (user) {
-          authView.classList.add("hidden");
-          appView.classList.remove("hidden");
-          welcomeUserText.textContent = `Welcome, ${user.displayName || user.email}`;
+    // Auth Listener & Real-time Rooms Sync
+    onAuthStateChanged(auth, async (user) => {
+      currentUser = user;
+      if (user) {
+        authView.classList.add("hidden");
+        appView.classList.remove("hidden");
+        welcomeUserText.textContent = `Welcome, ${user.displayName || user.email}`;
 
-          // Auto-open Host Panel if user registered as host
-          try {
-            const snap = await getDoc(doc(db, "users", user.uid));
-            if (snap.exists() && snap.data().role === "host") {
-              hostModeTab.click();
-            }
-          } catch (_) {}
+        try {
+          const snap = await get(ref(db, `users/${user.uid}`));
+          if (snap.exists() && snap.val().role === "host") {
+            hostModeTab.click();
+          }
+        } catch (_) {}
 
-          // Real-time Firestore listener
-          const q = query(collection(db, "rooms"), orderBy("createdAt", "desc"));
-          unsubscribeRooms = onSnapshot(q, (snapshot) => {
-            allRooms = snapshot.docs.map((d) => ({ id: d.id, ...d.data() }));
-            renderRooms();
-          });
-        } else {
-          if (unsubscribeRooms) unsubscribeRooms();
-          appView.classList.add("hidden");
-          authView.classList.remove("hidden");
-        }
-      });
-    }
+        roomsRef = ref(db, "rooms");
+        onValue(roomsRef, (snapshot) => {
+          const val = snapshot.val();
+          allRooms = val
+            ? Object.entries(val).map(([id, data]) => ({ id, ...data }))
+            : [];
+          allRooms.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          renderRooms();
+        });
+      } else {
+        if (roomsRef) off(roomsRef);
+        appView.classList.add("hidden");
+        authView.classList.remove("hidden");
+      }
+    });
   </script>
 </body>
 </html>
