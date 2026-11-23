@@ -40,15 +40,19 @@ const roomsList = document.getElementById("roomsList");
 const backToRoomsBtn = document.getElementById("backToRoomsBtn");
 const bookingRoomSummary = document.getElementById("bookingRoomSummary");
 const confirmBookingForm = document.getElementById("confirmBookingForm");
-const bookingNightsInput = document.getElementById("bookingNightsInput");
+const bookingCheckInInput = document.getElementById("bookingCheckInInput");
+const bookingCheckOutInput = document.getElementById("bookingCheckOutInput");
+const bookingStaySummaryText = document.getElementById("bookingStaySummaryText");
 const savedGuestPhoneNote = document.getElementById("savedGuestPhoneNote");
 const bookingTotalText = document.getElementById("bookingTotalText");
 const confirmBookingBtn = document.getElementById("confirmBookingBtn");
 const bookingPendingBox = document.getElementById("bookingPendingBox");
 const bookingPendingRefText = document.getElementById("bookingPendingRefText");
+const bookingPendingMetaText = document.getElementById("bookingPendingMetaText");
 const callHostPendingBtn = document.getElementById("callHostPendingBtn");
 const bookingConfirmedBox = document.getElementById("bookingConfirmedBox");
 const bookingRefText = document.getElementById("bookingRefText");
+const bookingConfirmedMetaText = document.getElementById("bookingConfirmedMetaText");
 const openDirectionsBtn = document.getElementById("openDirectionsBtn");
 const callHostConfirmedBtn = document.getElementById("callHostConfirmedBtn");
 
@@ -109,6 +113,59 @@ function normalizePhone(rawPhone) {
   return null;
 }
 
+function toIsoDate(dateObj) {
+  const year = dateObj.getFullYear();
+  const month = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const day = String(dateObj.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysToIso(isoDate, daysToAdd) {
+  const parts = (isoDate || "").split("-").map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) {
+    return toIsoDate(new Date(Date.now() + daysToAdd * 86400000));
+  }
+  const d = new Date(parts[0], parts[1] - 1, parts[2] + daysToAdd);
+  return toIsoDate(d);
+}
+
+function parseIsoDayMs(isoDate) {
+  const parts = (isoDate || "").split("-").map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return null;
+  return Date.UTC(parts[0], parts[1] - 1, parts[2]);
+}
+
+function computeStayDetails(checkInIso, checkOutIso) {
+  const inMs = parseIsoDayMs(checkInIso);
+  const outMs = parseIsoDayMs(checkOutIso);
+  if (inMs === null || outMs === null) {
+    return { nights: 1, validRange: false };
+  }
+  const diffDays = Math.round((outMs - inMs) / 86400000);
+  if (diffDays < 1) {
+    return { nights: 1, validRange: false };
+  }
+  return { nights: diffDays, validRange: true };
+}
+
+function formatReadableDate(isoDate) {
+  const parts = (isoDate || "").split("-").map(Number);
+  if (parts.length !== 3 || parts.some(Number.isNaN)) return isoDate || "—";
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
+  return d.toLocaleDateString(undefined, { day: "2-digit", month: "short", year: "numeric" });
+}
+
+function formatBookedWhen(ts) {
+  if (!ts) return "Just now";
+  return new Date(ts).toLocaleString(undefined, {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+}
+
 function showSection(sectionName) {
   guestSection.classList.toggle("hidden", sectionName !== "guest");
   bookingSection.classList.toggle("hidden", sectionName !== "booking");
@@ -152,7 +209,7 @@ function populateAccountForm() {
   accountEmailDisplay.value = currentUser.email || profile.email || "";
   const roleLabel = isAdmin ? "Admin" : (profile.role || "guest").toUpperCase();
   const updatedText = profile.updatedAt
-    ? ` • Last updated ${new Date(profile.updatedAt).toLocaleDateString()}`
+    ? ` • Last updated ${formatBookedWhen(profile.updatedAt)}`
     : "";
   accountMetaText.textContent = `Account Type: ${roleLabel}${updatedText}`;
 }
@@ -469,13 +526,36 @@ window.rejectAndDeleteRoom = async (roomId, encodedTitle) => {
   await remove(ref(db, `rooms/${roomId}`));
 };
 
-// Guest: Open Booking Summary View for a Selected Room
-function updateBookingTotal() {
+// Guest: Calendar Date Calculation & Total Price
+function syncCalendarDatesAndTotal(autoAdjustCheckout = false) {
   if (!activeBookingRoom) return;
-  const nights = Math.max(1, parseInt(bookingNightsInput.value, 10) || 1);
+
+  const todayIso = toIsoDate(new Date());
+  bookingCheckInInput.min = todayIso;
+
+  let checkInIso = bookingCheckInInput.value || todayIso;
+  if (checkInIso < todayIso) {
+    checkInIso = todayIso;
+    bookingCheckInInput.value = checkInIso;
+  }
+
+  bookingCheckOutInput.min = addDaysToIso(checkInIso, 1);
+
+  let checkOutIso = bookingCheckOutInput.value;
+  if (!checkOutIso || autoAdjustCheckout || checkOutIso <= checkInIso) {
+    checkOutIso = addDaysToIso(checkInIso, 1);
+    bookingCheckOutInput.value = checkOutIso;
+  }
+
+  const { nights } = computeStayDetails(checkInIso, checkOutIso);
   const total = nights * Number(activeBookingRoom.nightlyPrice || 0);
+
+  bookingStaySummaryText.innerHTML = `Stay: <strong>${formatReadableDate(checkInIso)} → ${formatReadableDate(checkOutIso)}</strong> (${nights} ${nights === 1 ? "night" : "nights"})`;
   bookingTotalText.textContent = `${total.toLocaleString()} TZS`;
 }
+
+bookingCheckInInput.addEventListener("change", () => syncCalendarDatesAndTotal(true));
+bookingCheckOutInput.addEventListener("change", () => syncCalendarDatesAndTotal(false));
 
 function syncGuestBookingStatusUI() {
   if (!activeBookingRoom || !activeBookingId) return;
@@ -484,13 +564,19 @@ function syncGuestBookingStatusUI() {
 
   const shortCode = `RM-${booking.id.slice(-4).toUpperCase()}`;
   const hostTel = `tel:${(booking.hostPhone || activeBookingRoom.hostPhone || "").replace(/\s+/g, "")}`;
+  const stayLabel =
+    booking.checkInDate && booking.checkOutDate
+      ? `${formatReadableDate(booking.checkInDate)} → ${formatReadableDate(booking.checkOutDate)} (${booking.nights || 1} night(s))`
+      : `${booking.nights || 1} night(s)`;
+  const bookedByWhen = `Booked by ${booking.guestName || "Guest"} on ${formatBookedWhen(booking.createdAt)}`;
 
   if (booking.status === "approved") {
     confirmBookingForm.classList.add("hidden");
     bookingPendingBox.classList.add("hidden");
     bookingConfirmedBox.classList.remove("hidden");
 
-    bookingRefText.textContent = `Reference: #${shortCode} • ${booking.nights} night(s) • ${Number(booking.totalTzs || 0).toLocaleString()} TZS`;
+    bookingRefText.textContent = `Reference: #${shortCode} • ${stayLabel} • ${Number(booking.totalTzs || 0).toLocaleString()} TZS`;
+    bookingConfirmedMetaText.textContent = `${bookedByWhen} • Approved ${formatBookedWhen(booking.updatedAt)}`;
     const dest = `${activeBookingRoom.latitude},${activeBookingRoom.longitude}`;
     openDirectionsBtn.href = userCoords
       ? `https://www.google.com/maps/dir/?api=1&origin=${userCoords.lat},${userCoords.lng}&destination=${dest}&travelmode=driving`
@@ -502,17 +588,16 @@ function syncGuestBookingStatusUI() {
     bookingConfirmedBox.classList.add("hidden");
     confirmBookingBtn.disabled = false;
     confirmBookingBtn.textContent = "Request Booking Again";
-    savedGuestPhoneNote.textContent = "Rooma: Previous request was declined by the host. You can send another request.";
+    savedGuestPhoneNote.textContent = "Rooma: Previous request was declined by the host. Choose dates to send another request.";
   } else {
     confirmBookingForm.classList.add("hidden");
     bookingConfirmedBox.classList.add("hidden");
     bookingPendingBox.classList.remove("hidden");
-    bookingPendingRefText.textContent = `Reference: #${shortCode} • ${booking.nights} night(s) • ${Number(booking.totalTzs || 0).toLocaleString()} TZS`;
+    bookingPendingRefText.textContent = `Reference: #${shortCode} • ${stayLabel} • ${Number(booking.totalTzs || 0).toLocaleString()} TZS`;
+    bookingPendingMetaText.textContent = bookedByWhen;
     callHostPendingBtn.href = hostTel;
   }
 }
-
-bookingNightsInput.addEventListener("input", updateBookingTotal);
 
 window.openBookingPage = (roomId) => {
   const room = allRooms.find((r) => r.id === roomId);
@@ -520,8 +605,11 @@ window.openBookingPage = (roomId) => {
 
   activeBookingRoom = room;
   activeBookingId = null;
-  bookingNightsInput.value = "1";
-  updateBookingTotal();
+
+  const todayIso = toIsoDate(new Date());
+  bookingCheckInInput.value = todayIso;
+  bookingCheckOutInput.value = addDaysToIso(todayIso, 1);
+  syncCalendarDatesAndTotal(false);
 
   const savedPhone = window.roomaUserProfile?.phone || "";
   savedGuestPhoneNote.textContent = savedPhone
@@ -571,12 +659,21 @@ window.openBookingPage = (roomId) => {
   }
 };
 
-// Guest: Request Booking -> Saves as "pending_host" until Host approves
+// Guest: Request Booking -> Saves dates, nights, timestamp & "pending_host"
 confirmBookingForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   if (!currentUser || !activeBookingRoom) return;
 
-  const nights = Math.max(1, parseInt(bookingNightsInput.value, 10) || 1);
+  syncCalendarDatesAndTotal(false);
+  const checkInDate = bookingCheckInInput.value;
+  const checkOutDate = bookingCheckOutInput.value;
+  const { nights, validRange } = computeStayDetails(checkInDate, checkOutDate);
+
+  if (!validRange) {
+    alert("Rooma: Check-out date must be at least 1 day after check-in date.");
+    return;
+  }
+
   const guestName = window.roomaUserProfile?.fullName || currentUser.displayName || currentUser.email || "Guest";
   const guestPhone = window.roomaUserProfile?.phone || "Not provided";
   const totalTzs = nights * Number(activeBookingRoom.nightlyPrice || 0);
@@ -595,6 +692,8 @@ confirmBookingForm.addEventListener("submit", async (e) => {
       guestId: currentUser.uid,
       guestName,
       guestPhone,
+      checkInDate,
+      checkOutDate,
       nights,
       totalTzs,
       status: "pending_host",
@@ -627,6 +726,11 @@ function renderActivityFeed() {
       const badgeLabel =
         status === "approved" ? "Approved" : status === "declined" ? "Declined" : "Waiting Host";
       const hostPhoneClean = (b.hostPhone || "").replace(/\s+/g, "");
+      const stayText =
+        b.checkInDate && b.checkOutDate
+          ? `${formatReadableDate(b.checkInDate)} → ${formatReadableDate(b.checkOutDate)} (${b.nights || 1} night(s))`
+          : `${b.nights || 1} night(s)`;
+
       items.push({
         ts: b.updatedAt || b.createdAt || 0,
         html: `
@@ -639,8 +743,8 @@ function renderActivityFeed() {
                 </div>
                 <span class="badge ${badgeClass}">${badgeLabel}</span>
               </div>
-              <p class="meta-line" style="margin-top:6px;">${b.nights} night(s) • <strong>${Number(b.totalTzs || 0).toLocaleString()} TZS</strong></p>
-              <p class="sub-meta" style="margin-top:4px;">Ref: #RM-${b.id.slice(-4).toUpperCase()}</p>
+              <p class="meta-line" style="margin-top:6px;">Dates: <strong>${stayText}</strong> • ${Number(b.totalTzs || 0).toLocaleString()} TZS</p>
+              <p class="sub-meta" style="margin-top:4px;">Booked by ${b.guestName || "You"} on ${formatBookedWhen(b.createdAt)} • Ref #RM-${b.id.slice(-4).toUpperCase()}</p>
             </div>
             <div class="confirmed-actions">
               <button type="button" class="btn-small" onclick="openBookingPage('${b.roomId}')">View Booking</button>
@@ -672,7 +776,7 @@ function renderActivityFeed() {
                 <span class="badge ${badgeClass}">${badgeLabel}</span>
               </div>
               <p class="meta-line" style="margin-top:6px;">📍 ${r.area}, ${r.city} • ${Number(r.nightlyPrice).toLocaleString()} TZS/night</p>
-              <p class="sub-meta" style="margin-top:4px;">Occupancy: ${r.availability === "available_now" ? "Available Now" : "Occupied"}</p>
+              <p class="sub-meta" style="margin-top:4px;">Listed ${formatBookedWhen(r.createdAt)} • ${r.availability === "available_now" ? "Available Now" : "Occupied"}</p>
             </div>
           </div>
         `
@@ -687,6 +791,10 @@ function renderActivityFeed() {
       const badgeClass = status === "approved" ? "avail" : status === "declined" ? "occ" : "pending";
       const badgeLabel =
         status === "approved" ? "Approved" : status === "declined" ? "Declined" : "Incoming Request";
+      const stayText =
+        b.checkInDate && b.checkOutDate
+          ? `${formatReadableDate(b.checkInDate)} → ${formatReadableDate(b.checkOutDate)} (${b.nights || 1} night(s))`
+          : `${b.nights || 1} night(s)`;
       items.push({
         ts: b.updatedAt || b.createdAt || 0,
         html: `
@@ -699,8 +807,8 @@ function renderActivityFeed() {
                 </div>
                 <span class="badge ${badgeClass}">${badgeLabel}</span>
               </div>
-              <p class="meta-line" style="margin-top:6px;">Guest: ${b.guestName} (${b.guestPhone})</p>
-              <p class="sub-meta" style="margin-top:4px;">${b.nights} night(s) • <strong>${Number(b.totalTzs || 0).toLocaleString()} TZS</strong></p>
+              <p class="meta-line" style="margin-top:6px;">Guest: <strong>${b.guestName}</strong> (${b.guestPhone})</p>
+              <p class="sub-meta" style="margin-top:4px;">${stayText} • Booked ${formatBookedWhen(b.createdAt)} • <strong>${Number(b.totalTzs || 0).toLocaleString()} TZS</strong></p>
             </div>
           </div>
         `
@@ -723,6 +831,7 @@ function renderActivityFeed() {
               <span class="badge avail">Saved</span>
             </div>
             <p class="meta-line" style="margin-top:6px;">Name: ${profile.fullName || ""} • Phone: ${profile.phone || "—"}</p>
+            <p class="sub-meta" style="margin-top:4px;">Updated on ${formatBookedWhen(profile.updatedAt)}</p>
           </div>
         </div>
       `
@@ -773,8 +882,13 @@ function renderHostBookings() {
       const badgeClass = status === "approved" ? "avail" : status === "declined" ? "occ" : "pending";
       const badgeText =
         status === "approved" ? "Approved" : status === "declined" ? "Declined" : "Needs Approval";
+      const stayText =
+        b.checkInDate && b.checkOutDate
+          ? `${formatReadableDate(b.checkInDate)} → ${formatReadableDate(b.checkOutDate)} (${b.nights || 1} night(s))`
+          : `${b.nights || 1} night(s)`;
+      const bookedWhen = formatBookedWhen(b.createdAt);
       const smsMsg = encodeURIComponent(
-        `Rooma Booking: ${b.guestName} (${b.guestPhone}) requested ${b.roomTitle} at ${b.guesthouseName} for ${b.nights} night(s) (${Number(b.totalTzs || 0).toLocaleString()} TZS).`
+        `Rooma Booking: ${b.guestName} (${b.guestPhone}) requested ${b.roomTitle} at ${b.guesthouseName} for ${stayText} (${Number(b.totalTzs || 0).toLocaleString()} TZS), booked ${bookedWhen}.`
       );
       const cleanPhone = (b.guestPhone || "").replace(/\s+/g, "");
 
@@ -788,8 +902,9 @@ function renderHostBookings() {
               </div>
               <span class="badge ${badgeClass}">${badgeText}</span>
             </div>
-            <p class="meta-line" style="margin-top:6px;">Guest: <strong>${b.guestName}</strong> • ${b.guestPhone}</p>
-            <p class="sub-meta" style="margin-top:4px;">${b.nights} night(s) • <strong>${Number(b.totalTzs || 0).toLocaleString()} TZS</strong></p>
+            <p class="meta-line" style="margin-top:6px;">Booked by: <strong>${b.guestName}</strong> (${b.guestPhone})</p>
+            <p class="meta-line" style="margin-top:4px;">Dates: <strong>${stayText}</strong> • ${Number(b.totalTzs || 0).toLocaleString()} TZS</p>
+            <p class="sub-meta" style="margin-top:4px;">Booked on: ${bookedWhen}</p>
           </div>
           <div style="display:flex;flex-direction:column;gap:8px;">
             <div class="admin-btn-row">
@@ -1021,6 +1136,10 @@ function renderAdminPanel() {
         const badgeClass = status === "approved" ? "avail" : status === "declined" ? "occ" : "pending";
         const badgeText =
           status === "approved" ? "Approved" : status === "declined" ? "Declined" : "Pending Host";
+        const stayText =
+          b.checkInDate && b.checkOutDate
+            ? `${formatReadableDate(b.checkInDate)} → ${formatReadableDate(b.checkOutDate)} (${b.nights || 1} night(s))`
+            : `${b.nights || 1} night(s)`;
 
         return `
           <div class="room-card">
@@ -1032,8 +1151,9 @@ function renderAdminPanel() {
                 </div>
                 <span class="badge ${badgeClass}">${badgeText}</span>
               </div>
-              <p class="meta-line" style="margin-top:6px;">Guest: ${b.guestName} (${b.guestPhone})</p>
-              <p class="sub-meta" style="margin-top:4px;">Host Phone: ${b.hostPhone} • ${b.nights} night(s) • <strong>${Number(b.totalTzs || 0).toLocaleString()} TZS</strong></p>
+              <p class="meta-line" style="margin-top:6px;">Booked by: <strong>${b.guestName}</strong> (${b.guestPhone})</p>
+              <p class="meta-line" style="margin-top:4px;">Dates: ${stayText} • <strong>${Number(b.totalTzs || 0).toLocaleString()} TZS</strong></p>
+              <p class="sub-meta" style="margin-top:4px;">Booked on: ${formatBookedWhen(b.createdAt)} • Host Phone: ${b.hostPhone}</p>
             </div>
           </div>
         `;
